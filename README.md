@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Americana Printing - Custom Screen Printing Website
+
+A modern, minimalist black and white website for Americana Printing's custom screen printing services. Built with Next.js and Tailwind CSS.
+
+## Features
+
+- 🎨 **Elegant Black & White Design** - Clean, professional minimalist aesthetic
+- 📝 **Quote Request Form** - Comprehensive form with all necessary fields for custom orders
+- 📁 **File Upload** - Customers can upload design files directly
+- 📱 **Fully Responsive** - Works perfectly on desktop, tablet, and mobile
+- ⚡ **Fast & Modern** - Built with Next.js 14 for optimal performance
+- 🚀 **Vercel Ready** - Optimized for deployment on Vercel
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ (installed via NVM)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository or navigate to the project directory:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd /Users/scottie/repos/asp-webapp
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+3. Run the development server:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+asp-webapp/
+├── app/
+│   ├── api/
+│   │   └── submit-quote/
+│   │       └── route.js          # API endpoint for form submissions
+│   ├── quote/
+│   │   └── page.js                # Quote request page
+│   ├── globals.css                # Global styles
+│   ├── layout.js                  # Root layout with header/footer
+│   └── page.js                    # Home page
+├── components/
+│   ├── Header.js                  # Navigation header
+│   ├── Footer.js                  # Footer with social links
+│   └── QuoteForm.js               # Quote request form component
+└── public/                        # Static assets
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Form Fields
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The quote form includes:
+- First Name (required)
+- Last Name (required)
+- Email (required)
+- Newsletter opt-in checkbox
+- Phone (optional)
+- What do you need? (required dropdown)
+- Quantity (required)
+- Garment Type (required)
+- Date Needed (optional)
+- Notes/Details (optional)
+- File Upload (optional)
 
-## Deploy on Vercel
+## Email Integration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The form currently logs submissions to the console. To enable email notifications:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Install an email service package (e.g., Resend):
+```bash
+npm install resend
+```
+
+2. Add your API key to `.env.local`:
+```
+RESEND_API_KEY=your_api_key_here
+```
+
+3. Uncomment and configure the email code in `app/api/submit-quote/route.js`
+
+## Deployment to Vercel
+
+1. Push your code to GitHub
+
+2. Go to [vercel.com](https://vercel.com) and sign in
+
+3. Click "New Project" and import your repository
+
+4. Vercel will auto-detect Next.js and configure everything
+
+5. Add environment variables if using email service
+
+6. Click "Deploy"
+
+Your site will be live in minutes!
+
+## Customization
+
+### Colors
+The site uses a black and white color scheme. To modify:
+- Edit `app/globals.css` for global color variables
+- Tailwind classes in components use `black`, `white`, and `gray-*` variants
+
+### Content
+- Update company name in `components/Header.js`
+- Modify hero text in `app/page.js`
+- Change social media links in `components/Footer.js`
+
+### Form Options
+Edit the dropdown options in `components/QuoteForm.js` under the "What do you need?" field
+
+## Tech Stack
+
+- **Framework**: Next.js 14 (App Router)
+- **Styling**: Tailwind CSS
+- **Language**: JavaScript
+- **Deployment**: Vercel
+
+## License
+
+© 2026 Americana Printing. All rights reserved.
