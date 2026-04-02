@@ -11,7 +11,7 @@ export default function PortfolioPage() {
     <div className="max-w-7xl mx-auto px-6 py-16">
       <div className="text-center mb-12">
         <h1 className="text-5xl font-bold mb-4">Our Work</h1>
-        <p className="text-xl text-gray-600">
+        <p className="text-xl text-gray-600 dark:text-gray-400">
           Explore our portfolio of custom screen printing projects
         </p>
       </div>
@@ -23,7 +23,7 @@ export default function PortfolioPage() {
             key={image.id} 
             className="break-inside-avoid group cursor-pointer"
           >
-            <div className="relative overflow-hidden border border-gray-200 hover:border-black transition-colors">
+            <div className="relative overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-black dark:hover:border-gray-400 transition-colors">
               <Image
                 src={image.src}
                 alt={image.alt}
