@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Services - Americana Printing',
+  title: 'Services - Thread Giant',
   description: 'Professional screen printing, embroidery, and custom apparel services.',
 };
 

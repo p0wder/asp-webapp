@@ -20,7 +20,6 @@ export default function Header() {
             priority
             className="h-12 w-auto"
           />
-          <span className="font-bold text-lg leading-tight sm:hidden">Thread Giant</span>
         </Link>
 
         {/* Desktop Nav */}

@@ -1,7 +1,7 @@
 import QuoteForm from '@/components/QuoteForm';
 
 export const metadata = {
-  title: 'Get a Quote - Americana Printing',
+  title: 'Get a Quote - Thread Giant',
   description: 'Request a custom quote for your screen printing project.',
 };
 

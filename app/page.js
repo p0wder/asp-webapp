@@ -2,15 +2,14 @@ import Link from 'next/link';
 
 export default function Home() {
   return (
-    <div className="max-w-7xl mx-auto px-6 py-20">
+    <div className="max-w-7xl mx-auto px-6 py-6 md:py-20">
       {/* Hero Section */}
-      <div className="flex flex-col items-center text-center space-y-8 py-20">
+      <div className="flex flex-col items-center text-center space-y-8 py-6 md:py-20">
         <h1 className="text-6xl md:text-7xl font-bold tracking-tight max-w-4xl">
-          Custom Screen Printing Made Simple
+          Custom Apparel Made Simple
         </h1>
         <p className="text-xl md:text-2xl text-gray-600 max-w-2xl">
-          Professional quality screen printing for t-shirts, hoodies, hats, and more. 
-          Bring your designs to life with Americana Printing.
+          Custom apparel, embroidery, online stores, and bulk orders made simple. Thread Giant brings your brand to life.
         </p>
         <Link 
           href="/quote" 
