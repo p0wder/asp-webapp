@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import { ThemeProvider } from "@/context/ThemeContext";
 
 export const metadata = {
-  title: "Americana Printing - Custom Screen Printing",
+  title: "Thread Giant - Custom Screen Printing",
   description: "Professional custom screen printing services for t-shirts, hoodies, and more.",
 };
 

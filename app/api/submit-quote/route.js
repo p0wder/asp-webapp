@@ -32,7 +32,7 @@ export async function POST(request) {
     // const { Resend } = require('resend');
     // const resend = new Resend(process.env.RESEND_API_KEY);
     // await resend.emails.send({
-    //   from: 'quotes@americanaprinting.com',
+    //   from: 'quotes@threadgiant.com',
     //   to: 'your-email@example.com',
     //   subject: `New Quote Request from ${data.firstName} ${data.lastName}`,
     //   html: `<h1>New Quote Request</h1>...`

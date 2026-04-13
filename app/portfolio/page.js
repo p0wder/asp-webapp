@@ -2,7 +2,7 @@ import Image from 'next/image';
 import { portfolioImages } from '@/lib/portfolioImages';
 
 export const metadata = {
-  title: 'Portfolio - Americana Printing',
+  title: 'Portfolio - Thread Giant',
   description: 'View our portfolio of custom screen printing work and designs.',
 };
 

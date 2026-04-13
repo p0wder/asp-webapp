@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Contact - Americana Printing',
-  description: 'Get in touch with Americana Printing for custom screen printing services.',
+  title: 'Contact - Thread Giant',
+  description: 'Get in touch with Thread Giant for custom screen printing services.',
 };
 
 export default function ContactPage() {
