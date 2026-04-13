@@ -28,7 +28,7 @@ export default function RootLayout({ children }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="flex flex-col min-h-screen bg-white text-black dark:bg-gray-950 dark:text-white transition-colors duration-300">
+      <body className="flex flex-col min-h-screen transition-colors duration-300" style={{ background: 'var(--background)', color: 'var(--foreground)' }}>
         <ThemeProvider>
           <Header />
           <main className="flex-grow">

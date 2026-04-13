@@ -79,13 +79,21 @@ export default function QuoteForm() {
     }
   };
 
+  const inputStyle = {
+    background: '#1a0033',
+    border: '1px solid #3B0066',
+    color: '#ffffff',
+  };
+
+  const inputFocusClass = "w-full px-4 py-3 rounded-lg focus:outline-none focus:ring-2";
+
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-6">
       {/* Name Fields */}
       <div className="grid md:grid-cols-2 gap-6">
         <div>
-          <label htmlFor="firstName" className="block text-sm font-medium mb-2">
-            First Name <span className="text-gray-500">(required)</span>
+          <label htmlFor="firstName" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+            First Name <span style={{ color: '#9D4EDD' }}>(required)</span>
           </label>
           <input
             type="text"
@@ -94,12 +102,13 @@ export default function QuoteForm() {
             value={formData.firstName}
             onChange={handleChange}
             required
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+            className={inputFocusClass}
+            style={{ ...inputStyle, '--tw-ring-color': '#CCFF00' }}
           />
         </div>
         <div>
-          <label htmlFor="lastName" className="block text-sm font-medium mb-2">
-            Last Name <span className="text-gray-500">(required)</span>
+          <label htmlFor="lastName" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+            Last Name <span style={{ color: '#9D4EDD' }}>(required)</span>
           </label>
           <input
             type="text"
@@ -108,15 +117,16 @@ export default function QuoteForm() {
             value={formData.lastName}
             onChange={handleChange}
             required
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+            className={inputFocusClass}
+            style={inputStyle}
           />
         </div>
       </div>
 
       {/* Email */}
       <div>
-        <label htmlFor="email" className="block text-sm font-medium mb-2">
-          Email <span className="text-gray-500">(required)</span>
+        <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+          Email <span style={{ color: '#9D4EDD' }}>(required)</span>
         </label>
         <input
           type="email"
@@ -125,7 +135,8 @@ export default function QuoteForm() {
           value={formData.email}
           onChange={handleChange}
           required
-          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+          className={inputFocusClass}
+          style={inputStyle}
         />
       </div>
 
@@ -137,16 +148,17 @@ export default function QuoteForm() {
           name="newsletter"
           checked={formData.newsletter}
           onChange={handleChange}
-          className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-black dark:focus:ring-white accent-black dark:accent-white"
+          className="w-5 h-5 rounded focus:ring-2"
+          style={{ accentColor: '#CCFF00', borderColor: '#3B0066' }}
         />
-        <label htmlFor="newsletter" className="text-sm font-medium">
+        <label htmlFor="newsletter" className="text-sm font-medium" style={{ color: '#9D4EDD' }}>
           SIGN UP FOR NEWS AND UPDATES
         </label>
       </div>
 
       {/* Phone */}
       <div>
-        <label htmlFor="phone" className="block text-sm font-medium mb-2">
+        <label htmlFor="phone" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
           Phone
         </label>
         <input
@@ -155,23 +167,25 @@ export default function QuoteForm() {
           name="phone"
           value={formData.phone}
           onChange={handleChange}
-          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+          className={inputFocusClass}
+          style={inputStyle}
         />
       </div>
 
       {/* What do you need */}
       <div>
-        <label htmlFor="whatDoYouNeed" className="block text-sm font-medium mb-2">
-          What do you need? <span className="text-gray-500">(required)</span>
+        <label htmlFor="whatDoYouNeed" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+          What do you need? <span style={{ color: '#9D4EDD' }}>(required)</span>
         </label>
-        <p className="text-sm text-gray-500 mb-2">This helps us quote you faster</p>
+        <p className="text-sm mb-2" style={{ color: '#9D4EDD' }}>This helps us quote you faster</p>
         <select
           id="whatDoYouNeed"
           name="whatDoYouNeed"
           value={formData.whatDoYouNeed}
           onChange={handleChange}
           required
-          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+          className={inputFocusClass}
+          style={inputStyle}
         >
           <option value="">Select an option</option>
           <option value="screen-printing">Screen Printing</option>
@@ -184,10 +198,10 @@ export default function QuoteForm() {
 
       {/* Quantity */}
       <div>
-        <label htmlFor="quantity" className="block text-sm font-medium mb-2">
-          Quantity <span className="text-gray-500">(required)</span>
+        <label htmlFor="quantity" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+          Quantity <span style={{ color: '#9D4EDD' }}>(required)</span>
         </label>
-        <p className="text-sm text-gray-500 mb-2">How many pieces do you need? (Best Estimate)</p>
+        <p className="text-sm mb-2" style={{ color: '#9D4EDD' }}>How many pieces do you need? (Best Estimate)</p>
         <input
           type="number"
           id="quantity"
@@ -196,16 +210,17 @@ export default function QuoteForm() {
           onChange={handleChange}
           required
           min="1"
-          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+          className={inputFocusClass}
+          style={inputStyle}
         />
       </div>
 
       {/* Garment Type */}
       <div>
-        <label htmlFor="garmentType" className="block text-sm font-medium mb-2">
-          Garment Type <span className="text-gray-500">(required)</span>
+        <label htmlFor="garmentType" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+          Garment Type <span style={{ color: '#9D4EDD' }}>(required)</span>
         </label>
-        <p className="text-sm text-gray-500 mb-2">(T-shirt, hoodie, hat, etc.)</p>
+        <p className="text-sm mb-2" style={{ color: '#9D4EDD' }}>(T-shirt, hoodie, hat, etc.)</p>
         <input
           type="text"
           id="garmentType"
@@ -213,13 +228,14 @@ export default function QuoteForm() {
           value={formData.garmentType}
           onChange={handleChange}
           required
-          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+          className={inputFocusClass}
+          style={inputStyle}
         />
       </div>
 
       {/* Date Needed */}
       <div>
-        <label htmlFor="dateNeeded" className="block text-sm font-medium mb-2">
+        <label htmlFor="dateNeeded" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
           Date Needed
         </label>
         <input
@@ -228,13 +244,14 @@ export default function QuoteForm() {
           name="dateNeeded"
           value={formData.dateNeeded}
           onChange={handleChange}
-          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
+          className={inputFocusClass}
+          style={inputStyle}
         />
       </div>
 
       {/* Notes/Details */}
       <div>
-        <label htmlFor="notes" className="block text-sm font-medium mb-2">
+        <label htmlFor="notes" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
           Notes / Details
         </label>
         <textarea
@@ -243,16 +260,22 @@ export default function QuoteForm() {
           value={formData.notes}
           onChange={handleChange}
           rows="4"
-          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white resize-none"
+          className={`${inputFocusClass} resize-none`}
+          style={inputStyle}
         />
       </div>
 
       {/* File Upload */}
       <div>
-        <label htmlFor="file" className="block text-sm font-medium mb-2">
+        <label htmlFor="file" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
           File Upload
         </label>
-        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-black dark:hover:border-gray-400 transition-colors">
+        <div
+          className="rounded-lg p-8 text-center transition-colors"
+          style={{ border: '2px dashed #3B0066' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = '#9D4EDD'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = '#3B0066'}
+        >
           <input
             type="file"
             id="file"
@@ -261,8 +284,8 @@ export default function QuoteForm() {
             className="hidden"
           />
           <label htmlFor="file" className="cursor-pointer">
-            <div className="text-4xl mb-2">+</div>
-            <div className="text-sm font-medium">
+            <div className="text-4xl mb-2" style={{ color: '#CCFF00' }}>+</div>
+            <div className="text-sm font-medium" style={{ color: '#9D4EDD' }}>
               {file ? file.name : 'Add a File'}
             </div>
           </label>
@@ -273,19 +296,23 @@ export default function QuoteForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full bg-black text-white dark:bg-white dark:text-black py-4 rounded-full font-medium text-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+        className="w-full py-4 rounded-full font-medium text-lg transition-colors disabled:cursor-not-allowed"
+        style={{
+          background: isSubmitting ? '#555' : '#CCFF00',
+          color: isSubmitting ? '#aaa' : '#0B0B0B',
+        }}
       >
         {isSubmitting ? 'SUBMITTING...' : 'SUBMIT'}
       </button>
 
       {/* Status Messages */}
       {submitStatus === 'success' && (
-        <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-green-800 dark:text-green-300 text-center">
+        <div className="p-4 rounded-lg text-center" style={{ background: '#0d2b0d', border: '1px solid #1a5c1a', color: '#4ade80' }}>
           Thank you! Your quote request has been submitted successfully. We'll get back to you soon.
         </div>
       )}
       {submitStatus === 'error' && (
-        <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-300 text-center">
+        <div className="p-4 rounded-lg text-center" style={{ background: '#2b0d0d', border: '1px solid #5c1a1a', color: '#f87171' }}>
           Sorry, there was an error submitting your request. Please try again or contact us directly.
         </div>
       )}

@@ -1,15 +1,16 @@
 export default function Footer() {
   return (
-    <footer className="border-t border-black dark:border-gray-700 mt-auto">
+    <footer style={{ borderTop: '1px solid #3B0066', background: '#3B0066' }} className="mt-auto">
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm">© 2026 Thread Giant. All rights reserved.</p>
+          <p className="text-sm" style={{ color: '#9D4EDD' }}>© 2026 Thread Giant. All rights reserved.</p>
           <div className="flex gap-6 items-center">
             <a 
               href="https://www.facebook.com/aspmerch" 
               target="_blank" 
               rel="noopener noreferrer"
               className="hover:opacity-70 transition-opacity"
+              style={{ color: '#CCFF00' }}
               aria-label="Facebook"
             >
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -21,6 +22,7 @@ export default function Footer() {
               target="_blank" 
               rel="noopener noreferrer"
               className="hover:opacity-70 transition-opacity"
+              style={{ color: '#CCFF00' }}
               aria-label="Instagram"
             >
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -8,8 +8,8 @@ export default function ContactPage() {
     <div className="max-w-7xl mx-auto px-6 py-16">
       {/* Header */}
       <div className="text-center mb-16">
-        <h1 className="text-5xl font-bold mb-4">Get In Touch</h1>
-        <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        <h1 className="text-5xl font-bold mb-4" style={{ color: '#ffffff' }}>Get In Touch</h1>
+        <p className="text-xl max-w-2xl mx-auto" style={{ color: '#9D4EDD' }}>
           Have questions about our services? Ready to start your custom printing project? 
           We'd love to hear from you.
         </p>
@@ -20,7 +20,10 @@ export default function ContactPage() {
         {/* Phone Card */}
         <a 
           href="tel:712-389-8862"
-          className="border border-gray-200 dark:border-gray-700 p-12 hover:border-black dark:hover:border-gray-400 transition-colors group text-center"
+          className="p-12 transition-colors group text-center"
+          style={{ border: '1px solid #3B0066' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = '#9D4EDD'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = '#3B0066'}
         >
           <div className="mb-6">
             <svg 
@@ -28,6 +31,7 @@ export default function ContactPage() {
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
+              style={{ color: '#CCFF00' }}
             >
               <path 
                 strokeLinecap="round" 
@@ -37,11 +41,11 @@ export default function ContactPage() {
               />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold mb-2">Phone / Text</h2>
-          <p className="text-xl text-gray-600 dark:text-gray-400 group-hover:text-black dark:group-hover:text-white transition-colors">
+          <h2 className="text-2xl font-bold mb-2" style={{ color: '#ffffff' }}>Phone / Text</h2>
+          <p className="text-xl transition-colors" style={{ color: '#9D4EDD' }}>
             712-389-8862
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-4">
+          <p className="text-sm mt-4" style={{ color: '#9D4EDD' }}>
             Click to call or text us
           </p>
         </a>
@@ -49,7 +53,10 @@ export default function ContactPage() {
         {/* Email Card */}
         <a 
           href="mailto:aspmerch@gmail.com"
-          className="border border-gray-200 dark:border-gray-700 p-12 hover:border-black dark:hover:border-gray-400 transition-colors group text-center"
+          className="p-12 transition-colors group text-center"
+          style={{ border: '1px solid #3B0066' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = '#9D4EDD'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = '#3B0066'}
         >
           <div className="mb-6">
             <svg 
@@ -57,6 +64,7 @@ export default function ContactPage() {
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
+              style={{ color: '#CCFF00' }}
             >
               <path 
                 strokeLinecap="round" 
@@ -66,25 +74,26 @@ export default function ContactPage() {
               />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold mb-2">Email</h2>
-          <p className="text-xl text-gray-600 dark:text-gray-400 group-hover:text-black dark:group-hover:text-white transition-colors break-all">
+          <h2 className="text-2xl font-bold mb-2" style={{ color: '#ffffff' }}>Email</h2>
+          <p className="text-xl transition-colors break-all" style={{ color: '#9D4EDD' }}>
             aspmerch@gmail.com
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-4">
+          <p className="text-sm mt-4" style={{ color: '#9D4EDD' }}>
             Click to send us an email
           </p>
         </a>
       </div>
 
       {/* Quick Quote CTA */}
-      <div className="text-center border-t border-black dark:border-gray-700 pt-16">
-        <h2 className="text-3xl font-bold mb-4">Need a Quote?</h2>
-        <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
+      <div className="text-center pt-16" style={{ borderTop: '1px solid #3B0066' }}>
+        <h2 className="text-3xl font-bold mb-4" style={{ color: '#ffffff' }}>Need a Quote?</h2>
+        <p className="text-xl mb-8 max-w-2xl mx-auto" style={{ color: '#9D4EDD' }}>
           Fill out our quick quote form and we'll get back to you with pricing and timeline details.
         </p>
         <a 
           href="/quote" 
-          className="inline-block bg-black text-white dark:bg-white dark:text-black px-10 py-4 rounded-full text-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+          className="inline-block px-10 py-4 rounded-full text-lg font-medium transition-colors"
+          style={{ background: '#CCFF00', color: '#0B0B0B' }}
         >
           Get Your Free Quote
         </a>
@@ -92,14 +101,14 @@ export default function ContactPage() {
 
       {/* Business Hours */}
       <div className="mt-16 text-center">
-        <h3 className="text-xl font-bold mb-4">Business Hours</h3>
-        <p className="text-gray-600 dark:text-gray-400">
+        <h3 className="text-xl font-bold mb-4" style={{ color: '#D4AF37' }}>Business Hours</h3>
+        <p style={{ color: '#9D4EDD' }}>
           Monday - Friday: 9:00 AM - 5:00 PM CST
         </p>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p style={{ color: '#9D4EDD' }}>
           Saturday - Sunday: Closed
         </p>
-        <p className="text-sm text-gray-500 dark:text-gray-500 mt-4">
+        <p className="text-sm mt-4" style={{ color: '#9D4EDD' }}>
           We typically respond within 24 hours
         </p>
       </div>
