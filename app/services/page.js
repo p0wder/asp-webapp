@@ -77,7 +77,7 @@ export default function ServicesPage() {
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-16">
       {/* Header */}
       <div className="text-center mb-14 md:mb-16">
-        <h1 className="text-4xl md:text-5xl font-bold mb-5" style={{ color: 'var(--foreground)' }}>Our Services</h1>
+        <h1 className="text-4xl md:text-5xl font-bold mb-5" style={{ color: 'var(--foreground)' }}>Our <span style={{ color: '#00FF66' }}>Services</span></h1>
         <p className="text-lg md:text-xl max-w-3xl mx-auto leading-relaxed" style={{ color: 'var(--muted)' }}>
           From businesses and schools to sports teams, events, and merch stores, we provide premium custom apparel solutions with fast turnaround and unmatched service.
         </p>

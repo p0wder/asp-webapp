@@ -3,7 +3,9 @@ export default function Footer() {
     <footer style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }} className="mt-auto">
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm" style={{ color: 'var(--muted)' }}>© 2026 Thread Giant. All rights reserved.</p>
+          <p className="text-sm" style={{ color: 'var(--muted)' }}>
+            © 2026 <span style={{ color: '#00FF66' }}>Thread Giant</span>. All rights reserved.
+          </p>
           <div className="flex gap-6 items-center">
             <a
               href="https://www.facebook.com/aspmerch"

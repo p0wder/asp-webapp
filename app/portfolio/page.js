@@ -10,7 +10,7 @@ export default function PortfolioPage() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-16">
       <div className="text-center mb-12">
-        <h1 className="text-5xl font-bold mb-4" style={{ color: 'var(--foreground)' }}>Our Work</h1>
+        <h1 className="text-5xl font-bold mb-4" style={{ color: 'var(--foreground)' }}>Our <span style={{ color: '#00FF66' }}>Work</span></h1>
         <p className="text-xl" style={{ color: 'var(--muted)' }}>
           Explore our portfolio of custom screen printing projects
         </p>

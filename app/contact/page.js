@@ -8,7 +8,7 @@ export default function ContactPage() {
     <div className="max-w-7xl mx-auto px-6 py-16">
       {/* Header */}
       <div className="text-center mb-16">
-        <h1 className="text-5xl font-bold mb-4" style={{ color: 'var(--foreground)' }}>Get In Touch</h1>
+        <h1 className="text-5xl font-bold mb-4" style={{ color: 'var(--foreground)' }}>Get <span style={{ color: '#00FF66' }}>In Touch</span></h1>
         <p className="text-xl max-w-2xl mx-auto" style={{ color: 'var(--muted)' }}>
           Have questions about our services? Ready to start your custom printing project?
           We'd love to hear from you.

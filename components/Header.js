@@ -27,21 +27,21 @@ export default function Header() {
         <nav className="hidden sm:flex items-center gap-8">
           <Link
             href="/services"
-            className="font-medium hover:opacity-75 transition-opacity"
+            className="font-medium nav-link-green transition-colors"
             style={{ color: 'var(--foreground)' }}
           >
             Services
           </Link>
           <Link
             href="/portfolio"
-            className="font-medium hover:opacity-75 transition-opacity"
+            className="font-medium nav-link-green transition-colors"
             style={{ color: 'var(--foreground)' }}
           >
             Portfolio
           </Link>
           <Link
             href="/contact"
-            className="font-medium hover:opacity-75 transition-opacity"
+            className="font-medium nav-link-green transition-colors"
             style={{ color: 'var(--foreground)' }}
           >
             Contact
