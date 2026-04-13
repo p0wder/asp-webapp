@@ -44,10 +44,11 @@ export default function Header() {
           </Link>
           <Link 
             href="/quote" 
-            className="bg-black text-white px-6 py-3 rounded-full font-medium hover:bg-gray-800 transition-colors"
+            className="bg-black text-white dark:bg-white dark:text-black px-6 py-3 rounded-full font-medium hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
           >
             Get a Quote
           </Link>
+          <ThemeToggle />
         </nav>
 
         {/* Mobile Hamburger */}

@@ -94,7 +94,7 @@ export default function QuoteForm() {
             value={formData.firstName}
             onChange={handleChange}
             required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
           />
         </div>
         <div>
@@ -108,7 +108,7 @@ export default function QuoteForm() {
             value={formData.lastName}
             onChange={handleChange}
             required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
           />
         </div>
       </div>
@@ -125,7 +125,7 @@ export default function QuoteForm() {
           value={formData.email}
           onChange={handleChange}
           required
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
         />
       </div>
 
@@ -137,7 +137,7 @@ export default function QuoteForm() {
           name="newsletter"
           checked={formData.newsletter}
           onChange={handleChange}
-          className="w-5 h-5 border-2 border-gray-300 rounded focus:ring-2 focus:ring-black"
+          className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-black dark:focus:ring-white accent-black dark:accent-white"
         />
         <label htmlFor="newsletter" className="text-sm font-medium">
           SIGN UP FOR NEWS AND UPDATES
@@ -155,7 +155,7 @@ export default function QuoteForm() {
           name="phone"
           value={formData.phone}
           onChange={handleChange}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
         />
       </div>
 
@@ -171,7 +171,7 @@ export default function QuoteForm() {
           value={formData.whatDoYouNeed}
           onChange={handleChange}
           required
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black bg-white"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
         >
           <option value="">Select an option</option>
           <option value="screen-printing">Screen Printing</option>
@@ -196,7 +196,7 @@ export default function QuoteForm() {
           onChange={handleChange}
           required
           min="1"
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
         />
       </div>
 
@@ -213,7 +213,7 @@ export default function QuoteForm() {
           value={formData.garmentType}
           onChange={handleChange}
           required
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
         />
       </div>
 
@@ -228,7 +228,7 @@ export default function QuoteForm() {
           name="dateNeeded"
           value={formData.dateNeeded}
           onChange={handleChange}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white"
         />
       </div>
 
@@ -243,7 +243,7 @@ export default function QuoteForm() {
           value={formData.notes}
           onChange={handleChange}
           rows="4"
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none"
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white bg-white dark:bg-gray-900 text-black dark:text-white resize-none"
         />
       </div>
 
@@ -252,7 +252,7 @@ export default function QuoteForm() {
         <label htmlFor="file" className="block text-sm font-medium mb-2">
           File Upload
         </label>
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-black transition-colors">
+        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-black dark:hover:border-gray-400 transition-colors">
           <input
             type="file"
             id="file"
@@ -273,19 +273,19 @@ export default function QuoteForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full bg-black text-white py-4 rounded-full font-medium text-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+        className="w-full bg-black text-white dark:bg-white dark:text-black py-4 rounded-full font-medium text-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
       >
         {isSubmitting ? 'SUBMITTING...' : 'SUBMIT'}
       </button>
 
       {/* Status Messages */}
       {submitStatus === 'success' && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 text-center">
+        <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-green-800 dark:text-green-300 text-center">
           Thank you! Your quote request has been submitted successfully. We'll get back to you soon.
         </div>
       )}
       {submitStatus === 'error' && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-center">
+        <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-300 text-center">
           Sorry, there was an error submitting your request. Please try again or contact us directly.
         </div>
       )}
