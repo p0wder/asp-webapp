@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
