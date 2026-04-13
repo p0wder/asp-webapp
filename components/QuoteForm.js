@@ -54,7 +54,6 @@ export default function QuoteForm() {
 
       if (response.ok) {
         setSubmitStatus('success');
-        // Reset form
         setFormData({
           firstName: '',
           lastName: '',
@@ -80,20 +79,20 @@ export default function QuoteForm() {
   };
 
   const inputStyle = {
-    background: '#1a0033',
-    border: '1px solid #3B0066',
-    color: '#ffffff',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    color: 'var(--foreground)',
   };
 
-  const inputFocusClass = "w-full px-4 py-3 rounded-lg focus:outline-none focus:ring-2";
+  const inputClass = "w-full px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7B00FF] transition-colors";
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-6">
       {/* Name Fields */}
       <div className="grid md:grid-cols-2 gap-6">
         <div>
-          <label htmlFor="firstName" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
-            First Name <span style={{ color: '#9D4EDD' }}>(required)</span>
+          <label htmlFor="firstName" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+            First Name <span style={{ color: 'var(--muted)' }}>(required)</span>
           </label>
           <input
             type="text"
@@ -102,13 +101,13 @@ export default function QuoteForm() {
             value={formData.firstName}
             onChange={handleChange}
             required
-            className={inputFocusClass}
-            style={{ ...inputStyle, '--tw-ring-color': '#CCFF00' }}
+            className={inputClass}
+            style={inputStyle}
           />
         </div>
         <div>
-          <label htmlFor="lastName" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
-            Last Name <span style={{ color: '#9D4EDD' }}>(required)</span>
+          <label htmlFor="lastName" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+            Last Name <span style={{ color: 'var(--muted)' }}>(required)</span>
           </label>
           <input
             type="text"
@@ -117,7 +116,7 @@ export default function QuoteForm() {
             value={formData.lastName}
             onChange={handleChange}
             required
-            className={inputFocusClass}
+            className={inputClass}
             style={inputStyle}
           />
         </div>
@@ -125,8 +124,8 @@ export default function QuoteForm() {
 
       {/* Email */}
       <div>
-        <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
-          Email <span style={{ color: '#9D4EDD' }}>(required)</span>
+        <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+          Email <span style={{ color: 'var(--muted)' }}>(required)</span>
         </label>
         <input
           type="email"
@@ -135,7 +134,7 @@ export default function QuoteForm() {
           value={formData.email}
           onChange={handleChange}
           required
-          className={inputFocusClass}
+          className={inputClass}
           style={inputStyle}
         />
       </div>
@@ -148,17 +147,17 @@ export default function QuoteForm() {
           name="newsletter"
           checked={formData.newsletter}
           onChange={handleChange}
-          className="w-5 h-5 rounded focus:ring-2"
-          style={{ accentColor: '#CCFF00', borderColor: '#3B0066' }}
+          className="w-5 h-5 rounded"
+          style={{ accentColor: '#7B00FF' }}
         />
-        <label htmlFor="newsletter" className="text-sm font-medium" style={{ color: '#9D4EDD' }}>
+        <label htmlFor="newsletter" className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
           SIGN UP FOR NEWS AND UPDATES
         </label>
       </div>
 
       {/* Phone */}
       <div>
-        <label htmlFor="phone" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+        <label htmlFor="phone" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
           Phone
         </label>
         <input
@@ -167,24 +166,24 @@ export default function QuoteForm() {
           name="phone"
           value={formData.phone}
           onChange={handleChange}
-          className={inputFocusClass}
+          className={inputClass}
           style={inputStyle}
         />
       </div>
 
       {/* What do you need */}
       <div>
-        <label htmlFor="whatDoYouNeed" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
-          What do you need? <span style={{ color: '#9D4EDD' }}>(required)</span>
+        <label htmlFor="whatDoYouNeed" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+          What do you need? <span style={{ color: 'var(--muted)' }}>(required)</span>
         </label>
-        <p className="text-sm mb-2" style={{ color: '#9D4EDD' }}>This helps us quote you faster</p>
+        <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>This helps us quote you faster</p>
         <select
           id="whatDoYouNeed"
           name="whatDoYouNeed"
           value={formData.whatDoYouNeed}
           onChange={handleChange}
           required
-          className={inputFocusClass}
+          className={inputClass}
           style={inputStyle}
         >
           <option value="">Select an option</option>
@@ -198,10 +197,10 @@ export default function QuoteForm() {
 
       {/* Quantity */}
       <div>
-        <label htmlFor="quantity" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
-          Quantity <span style={{ color: '#9D4EDD' }}>(required)</span>
+        <label htmlFor="quantity" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+          Quantity <span style={{ color: 'var(--muted)' }}>(required)</span>
         </label>
-        <p className="text-sm mb-2" style={{ color: '#9D4EDD' }}>How many pieces do you need? (Best Estimate)</p>
+        <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>How many pieces do you need? (Best Estimate)</p>
         <input
           type="number"
           id="quantity"
@@ -210,17 +209,17 @@ export default function QuoteForm() {
           onChange={handleChange}
           required
           min="1"
-          className={inputFocusClass}
+          className={inputClass}
           style={inputStyle}
         />
       </div>
 
       {/* Garment Type */}
       <div>
-        <label htmlFor="garmentType" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
-          Garment Type <span style={{ color: '#9D4EDD' }}>(required)</span>
+        <label htmlFor="garmentType" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+          Garment Type <span style={{ color: 'var(--muted)' }}>(required)</span>
         </label>
-        <p className="text-sm mb-2" style={{ color: '#9D4EDD' }}>(T-shirt, hoodie, hat, etc.)</p>
+        <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>(T-shirt, hoodie, hat, etc.)</p>
         <input
           type="text"
           id="garmentType"
@@ -228,14 +227,14 @@ export default function QuoteForm() {
           value={formData.garmentType}
           onChange={handleChange}
           required
-          className={inputFocusClass}
+          className={inputClass}
           style={inputStyle}
         />
       </div>
 
       {/* Date Needed */}
       <div>
-        <label htmlFor="dateNeeded" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+        <label htmlFor="dateNeeded" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
           Date Needed
         </label>
         <input
@@ -244,14 +243,14 @@ export default function QuoteForm() {
           name="dateNeeded"
           value={formData.dateNeeded}
           onChange={handleChange}
-          className={inputFocusClass}
+          className={inputClass}
           style={inputStyle}
         />
       </div>
 
       {/* Notes/Details */}
       <div>
-        <label htmlFor="notes" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+        <label htmlFor="notes" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
           Notes / Details
         </label>
         <textarea
@@ -260,21 +259,19 @@ export default function QuoteForm() {
           value={formData.notes}
           onChange={handleChange}
           rows="4"
-          className={`${inputFocusClass} resize-none`}
+          className={`${inputClass} resize-none`}
           style={inputStyle}
         />
       </div>
 
       {/* File Upload */}
       <div>
-        <label htmlFor="file" className="block text-sm font-medium mb-2" style={{ color: '#ffffff' }}>
+        <label htmlFor="file" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
           File Upload
         </label>
         <div
-          className="rounded-lg p-8 text-center transition-colors"
-          style={{ border: '2px dashed #3B0066' }}
-          onMouseEnter={e => e.currentTarget.style.borderColor = '#9D4EDD'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = '#3B0066'}
+          className="rounded-lg p-8 text-center transition-colors cursor-pointer"
+          style={{ border: '2px dashed var(--border)', background: 'var(--surface)' }}
         >
           <input
             type="file"
@@ -284,8 +281,8 @@ export default function QuoteForm() {
             className="hidden"
           />
           <label htmlFor="file" className="cursor-pointer">
-            <div className="text-4xl mb-2" style={{ color: '#CCFF00' }}>+</div>
-            <div className="text-sm font-medium" style={{ color: '#9D4EDD' }}>
+            <div className="text-4xl mb-2" style={{ color: 'var(--accent)' }}>+</div>
+            <div className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
               {file ? file.name : 'Add a File'}
             </div>
           </label>
@@ -296,23 +293,20 @@ export default function QuoteForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full py-4 rounded-full font-medium text-lg transition-colors disabled:cursor-not-allowed"
-        style={{
-          background: isSubmitting ? '#555' : '#CCFF00',
-          color: isSubmitting ? '#aaa' : '#0B0B0B',
-        }}
+        className="w-full py-4 rounded-full font-medium text-lg transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ background: 'var(--accent)', color: '#ffffff' }}
       >
         {isSubmitting ? 'SUBMITTING...' : 'SUBMIT'}
       </button>
 
       {/* Status Messages */}
       {submitStatus === 'success' && (
-        <div className="p-4 rounded-lg text-center" style={{ background: '#0d2b0d', border: '1px solid #1a5c1a', color: '#4ade80' }}>
+        <div className="p-4 rounded-lg text-center" style={{ background: 'var(--surface)', border: '1px solid #00FF66', color: '#00FF66' }}>
           Thank you! Your quote request has been submitted successfully. We'll get back to you soon.
         </div>
       )}
       {submitStatus === 'error' && (
-        <div className="p-4 rounded-lg text-center" style={{ background: '#2b0d0d', border: '1px solid #5c1a1a', color: '#f87171' }}>
+        <div className="p-4 rounded-lg text-center" style={{ background: 'var(--surface)', border: '1px solid #ff4444', color: '#ff4444' }}>
           Sorry, there was an error submitting your request. Please try again or contact us directly.
         </div>
       )}
