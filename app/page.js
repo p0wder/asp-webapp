@@ -9,7 +9,7 @@ export default function Home() {
           Custom Apparel <span style={{ color: '#00FF66' }}>Made Simple</span>
         </h1>
         <p className="text-xl md:text-2xl max-w-2xl" style={{ color: 'var(--muted)' }}>
-          Custom apparel, embroidery, online stores, and bulk orders made simple. Thread Giant brings your brand to life.
+          Custom apparel, embroidery, online stores, and bulk orders made simple. <span style={{ fontVariant: 'small-caps' }}>Thread Giant</span> brings your brand to life.
         </p>
         <Link
           href="/quote"
