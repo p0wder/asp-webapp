@@ -128,6 +128,7 @@ export default function QuoteForm() {
 
   const [selectedGarments, setSelectedGarments] = useState([]);
   const [locsEnabled, setLocsEnabled] = useState(false);
+  const [addressEnabled, setAddressEnabled] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]); // [{ name, url, uploading, error }]
   const [dragOver, setDragOver] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -231,6 +232,14 @@ export default function QuoteForm() {
           locations: locsEnabled ? data.locations : [],
           locsEnabled,
           artworkUrls,
+          // Address — only sent if the user filled it in (new customers only)
+          address: addressEnabled ? {
+            address1: data.address1 || null,
+            address2: data.address2 || null,
+            city: data.city || null,
+            state: data.state || null,
+            zip: data.zip || null,
+          } : null,
         }),
       });
       const json = await res.json();
@@ -359,6 +368,42 @@ export default function QuoteForm() {
               <label style={fieldLabel}>In-hands date</label>
               <input type="date" style={{ ...inputBase, colorScheme: "light" }} {...register("dueDate")} />
             </div>
+          </div>
+
+          {/* ── Optional billing address ── */}
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 4 }}>
+            <Toggle
+              on={addressEnabled}
+              onToggle={() => setAddressEnabled((v) => !v)}
+              label="Billing address — optional"
+              hint="Add your billing address to save time. Only needed for new customers."
+            />
+            {addressEnabled && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={fieldLabel}>Address line 1</label>
+                  <input style={inputBase} placeholder="123 Main St" {...register("address1")} />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={fieldLabel}>Address line 2</label>
+                  <input style={inputBase} placeholder="Suite 100 (optional)" {...register("address2")} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14, marginBottom: 0 }}>
+                  <div>
+                    <label style={fieldLabel}>City</label>
+                    <input style={inputBase} placeholder="Charlotte" {...register("city")} />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>State</label>
+                    <input style={inputBase} placeholder="NC" maxLength={2} {...register("state")} />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>Zip</label>
+                    <input style={inputBase} placeholder="28201" {...register("zip")} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

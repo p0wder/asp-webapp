@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   findContactByEmail,
+  createCustomer,
   createQuote,
   setQuoteStatus,
   createLineItemGroup,
@@ -37,6 +38,7 @@ export async function POST(request) {
       locations = [],
       locsEnabled = false,
       artworkUrls = [],
+      address = null,
     } = body;
 
     // ── Build job nickname ──────────────────────────────────────────────────
@@ -69,9 +71,13 @@ export async function POST(request) {
             .join('\n')}`
         : null;
 
-    const customerNote = [notes || null, artworkSection].filter(Boolean).join('\n\n') || null;
+    const notesSection = notes
+      ? `━━━ NOTES / SPECIAL REQUESTS ━━━\n${notes}`
+      : null;
 
-    // ── 1. Find or fall back to a default contact ────────────────────────────
+    const customerNote = [notesSection, artworkSection].filter(Boolean).join('\n\n') || null;
+
+    // ── 1. Find existing contact by email, or create a new customer ──────────
     let contactId = null;
 
     try {
@@ -80,25 +86,24 @@ export async function POST(request) {
         contactId = existing.id;
       }
     } catch {
-      // Non-fatal — will fall through to fallback
+      // Non-fatal — will fall through to create
     }
 
     if (!contactId) {
-      const { gql } = await import('@/lib/printavo');
-      const data = await gql('{ contacts(first: 1) { nodes { id } } }');
-      contactId = data.contacts.nodes[0]?.id;
-    }
-
-    if (!contactId) {
-      throw new Error('No contact found in Printavo account. Please add at least one contact.');
+      // Customer not found — create a new one
+      const newCustomer = await createCustomer({
+        firstName: fname,
+        lastName: lname || '',
+        email,
+        phone: phone || null,
+        companyName: company || null,
+        address: address || null,
+      });
+      contactId = newCustomer.primaryContact.id;
     }
 
     // ── 2. Create the quote ──────────────────────────────────────────────────
     const fullCustomerNote = [
-      `Customer: ${[fname, lname].filter(Boolean).join(' ')}`,
-      email ? `Email: ${email}` : null,
-      phone ? `Phone: ${phone}` : null,
-      company ? `Company: ${company}` : null,
       customerNote,
     ]
       .filter(Boolean)
