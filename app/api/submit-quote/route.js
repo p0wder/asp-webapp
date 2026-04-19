@@ -38,7 +38,8 @@ export async function POST(request) {
       locations = [],
       locsEnabled = false,
       artworkUrls = [],
-      address = null,
+      billingAddress = null,
+      shippingAddress = null,
     } = body;
 
     // ── Build job nickname ──────────────────────────────────────────────────
@@ -97,7 +98,7 @@ export async function POST(request) {
         email,
         phone: phone || null,
         companyName: company || null,
-        address: address || null,
+        address: billingAddress || null,
       });
       contactId = newCustomer.primaryContact.id;
     }
@@ -109,12 +110,24 @@ export async function POST(request) {
       .filter(Boolean)
       .join('\n');
 
+    // Build CustomerAddressInput for quote (uses stateIso, zipCode, countryIso)
+    const toQuoteAddress = (addr) => addr ? {
+      address1: addr.address1 || null,
+      address2: addr.address2 || null,
+      city: addr.city || null,
+      stateIso: addr.state || null,
+      zipCode: addr.zip || null,
+      countryIso: 'US',
+    } : null;
+
     const quote = await createQuote({
       contactId,
       nickname: resolvedJobName,
       customerDueAt: dueDate || null,
       customerNote: fullCustomerNote,
       productionNote,
+      billingAddress: toQuoteAddress(billingAddress),
+      shippingAddress: toQuoteAddress(shippingAddress),
     });
 
     const quoteId = quote.id;

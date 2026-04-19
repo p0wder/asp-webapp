@@ -129,6 +129,7 @@ export default function QuoteForm() {
   const [selectedGarments, setSelectedGarments] = useState([]);
   const [locsEnabled, setLocsEnabled] = useState(false);
   const [addressEnabled, setAddressEnabled] = useState(false);
+  const [shippingSameAsBilling, setShippingSameAsBilling] = useState(true);
   const [uploadedFiles, setUploadedFiles] = useState([]); // [{ name, url, uploading, error }]
   const [dragOver, setDragOver] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -233,13 +234,26 @@ export default function QuoteForm() {
           locsEnabled,
           artworkUrls,
           // Address — only sent if the user filled it in (new customers only)
-          address: addressEnabled ? {
-            address1: data.address1 || null,
-            address2: data.address2 || null,
-            city: data.city || null,
-            state: data.state || null,
-            zip: data.zip || null,
+          billingAddress: addressEnabled ? {
+            address1: data.billingAddress1 || null,
+            address2: data.billingAddress2 || null,
+            city: data.billingCity || null,
+            state: data.billingState || null,
+            zip: data.billingZip || null,
           } : null,
+          shippingAddress: addressEnabled ? (shippingSameAsBilling ? {
+            address1: data.billingAddress1 || null,
+            address2: data.billingAddress2 || null,
+            city: data.billingCity || null,
+            state: data.billingState || null,
+            zip: data.billingZip || null,
+          } : {
+            address1: data.shippingAddress1 || null,
+            address2: data.shippingAddress2 || null,
+            city: data.shippingCity || null,
+            state: data.shippingState || null,
+            zip: data.shippingZip || null,
+          }) : null,
         }),
       });
       const json = await res.json();
@@ -370,38 +384,83 @@ export default function QuoteForm() {
             </div>
           </div>
 
-          {/* ── Optional billing address ── */}
+          {/* ── Optional billing + shipping address ── */}
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 4 }}>
             <Toggle
               on={addressEnabled}
               onToggle={() => setAddressEnabled((v) => !v)}
-              label="Billing address — optional"
-              hint="Add your billing address to save time. Only needed for new customers."
+              label="Billing &amp; shipping address — optional"
+              hint="Add your address to save time. Only needed for new customers."
             />
             {addressEnabled && (
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 14 }}>
+                {/* Billing */}
+                <p style={{ ...sectionLabel, marginBottom: 10 }}>Billing address</p>
                 <div style={{ marginBottom: 14 }}>
                   <label style={fieldLabel}>Address line 1</label>
-                  <input style={inputBase} placeholder="123 Main St" {...register("address1")} />
+                  <input style={inputBase} placeholder="123 Main St" {...register("billingAddress1")} />
                 </div>
                 <div style={{ marginBottom: 14 }}>
                   <label style={fieldLabel}>Address line 2</label>
-                  <input style={inputBase} placeholder="Suite 100 (optional)" {...register("address2")} />
+                  <input style={inputBase} placeholder="Suite 100 (optional)" {...register("billingAddress2")} />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14, marginBottom: 0 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14, marginBottom: 14 }}>
                   <div>
                     <label style={fieldLabel}>City</label>
-                    <input style={inputBase} placeholder="Charlotte" {...register("city")} />
+                    <input style={inputBase} placeholder="Charlotte" {...register("billingCity")} />
                   </div>
                   <div>
                     <label style={fieldLabel}>State</label>
-                    <input style={inputBase} placeholder="NC" maxLength={2} {...register("state")} />
+                    <input style={inputBase} placeholder="NC" maxLength={2} {...register("billingState")} />
                   </div>
                   <div>
                     <label style={fieldLabel}>Zip</label>
-                    <input style={inputBase} placeholder="28201" {...register("zip")} />
+                    <input style={inputBase} placeholder="28201" {...register("billingZip")} />
                   </div>
                 </div>
+
+                {/* Same as billing checkbox */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <input
+                    type="checkbox"
+                    id="shipping-same"
+                    checked={shippingSameAsBilling}
+                    onChange={(e) => setShippingSameAsBilling(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)", flexShrink: 0 }}
+                  />
+                  <label htmlFor="shipping-same" style={{ fontSize: 13, color: "var(--foreground)", cursor: "pointer" }}>
+                    Shipping address same as billing
+                  </label>
+                </div>
+
+                {/* Shipping (only shown when not same as billing) */}
+                {!shippingSameAsBilling && (
+                  <>
+                    <p style={{ ...sectionLabel, marginBottom: 10 }}>Shipping address</p>
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={fieldLabel}>Address line 1</label>
+                      <input style={inputBase} placeholder="123 Main St" {...register("shippingAddress1")} />
+                    </div>
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={fieldLabel}>Address line 2</label>
+                      <input style={inputBase} placeholder="Suite 100 (optional)" {...register("shippingAddress2")} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14, marginBottom: 0 }}>
+                      <div>
+                        <label style={fieldLabel}>City</label>
+                        <input style={inputBase} placeholder="Charlotte" {...register("shippingCity")} />
+                      </div>
+                      <div>
+                        <label style={fieldLabel}>State</label>
+                        <input style={inputBase} placeholder="NC" maxLength={2} {...register("shippingState")} />
+                      </div>
+                      <div>
+                        <label style={fieldLabel}>Zip</label>
+                        <input style={inputBase} placeholder="28201" {...register("shippingZip")} />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
