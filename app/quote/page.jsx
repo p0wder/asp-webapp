@@ -128,7 +128,7 @@ export default function QuoteForm() {
 
   const [selectedGarments, setSelectedGarments] = useState([]);
   const [locsEnabled, setLocsEnabled] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedFiles, setUploadedFiles] = useState([]); // [{ name, url, uploading, error }]
   const [dragOver, setDragOver] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
@@ -139,11 +139,33 @@ export default function QuoteForm() {
     );
   };
 
-  const handleFiles = useCallback((files) => {
-    const newFiles = Array.from(files).filter(
-      (f) => !uploadedFiles.find((u) => u.name === f.name && u.size === f.size)
+  const handleFiles = useCallback(async (files) => {
+    const incoming = Array.from(files).filter(
+      (f) => !uploadedFiles.find((u) => u.name === f.name)
     );
-    setUploadedFiles((prev) => [...prev, ...newFiles]);
+    if (incoming.length === 0) return;
+
+    // Add placeholders immediately so the user sees them
+    const placeholders = incoming.map((f) => ({ name: f.name, url: null, uploading: true, error: null }));
+    setUploadedFiles((prev) => [...prev, ...placeholders]);
+
+    // Upload each file to Vercel Blob
+    for (const file of incoming) {
+      try {
+        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          body: file,
+        });
+        const blob = await res.json();
+        setUploadedFiles((prev) =>
+          prev.map((f) => f.name === file.name ? { name: file.name, url: blob.url, uploading: false, error: null } : f)
+        );
+      } catch {
+        setUploadedFiles((prev) =>
+          prev.map((f) => f.name === file.name ? { name: file.name, url: null, uploading: false, error: 'Upload failed' } : f)
+        );
+      }
+    }
   }, [uploadedFiles]);
 
   const removeFile = (i) => setUploadedFiles((prev) => prev.filter((_, idx) => idx !== i));
@@ -178,24 +200,29 @@ export default function QuoteForm() {
       ink_colors: data.inkColors,
     }));
 
-    // ── Build FormData so files are sent to the API route ──
-    const fd = new FormData();
-    fd.append("fname",          data.fname);
-    fd.append("lname",          data.lname);
-    fd.append("email",          data.email);
-    fd.append("phone",          data.phone || "");
-    fd.append("company",        data.company || "");
-    fd.append("dueDate",        data.dueDate || "");
-    fd.append("notes",          data.notes || "");
-    fd.append("jobName",        resolvedJobName);
-    fd.append("printLocations", locSummary || "");
-    fd.append("lineItems",      JSON.stringify(lineItems));
-    for (const file of uploadedFiles) {
-      fd.append("files", file);
+    // Only submit once all files have finished uploading
+    const stillUploading = uploadedFiles.some((f) => f.uploading);
+    if (stillUploading) {
+      setSubmitError("Please wait for your files to finish uploading.");
+      return;
     }
 
+    const artworkUrls = uploadedFiles
+      .filter((f) => f.url)
+      .map((f) => ({ name: f.name, url: f.url }));
+
     try {
-      const res = await fetch("/api/submit-quote", { method: "POST", body: fd });
+      const res = await fetch("/api/submit-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fname: data.fname, lname: data.lname, email: data.email,
+          phone: data.phone, company: data.company,
+          dueDate: data.dueDate, notes: data.notes,
+          jobName: resolvedJobName, printLocations: locSummary || "",
+          lineItems, artworkUrls,
+        }),
+      });
       const json = await res.json();
 
       if (!res.ok || !json.success) {
@@ -203,14 +230,7 @@ export default function QuoteForm() {
         return;
       }
 
-      const fileMsg =
-        json.filesTotal > 0
-          ? ` ${json.filesAttached} of ${json.filesTotal} artwork file${json.filesTotal > 1 ? "s" : ""} attached.`
-          : "";
-
-      setSubmitSuccess(
-        `Quote created in Printavo!${fileMsg} We'll be in touch soon.`
-      );
+      setSubmitSuccess("Quote submitted! We'll be in touch soon.");
     } catch (err) {
       console.error(err);
       setSubmitError("Network error — please try again or email us directly.");
@@ -556,49 +576,36 @@ export default function QuoteForm() {
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {uploadedFiles.map((file, i) => {
-              const kb =
-                file.size < 1024 * 1024
-                  ? `${(file.size / 1024).toFixed(0)}KB`
-                  : `${(file.size / 1024 / 1024).toFixed(1)}MB`;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    background: "var(--background)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    padding: "7px 12px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-                    <span style={{ fontSize: 12, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {file.name}
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{kb}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(i)}
-                    style={{
-                      fontSize: 12,
-                      color: "#ff4444",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      flexShrink: 0,
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    Remove
-                  </button>
+            {uploadedFiles.map((file, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "var(--background)",
+                  border: `1px solid ${file.error ? "#ff4444" : file.uploading ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: 8,
+                  padding: "7px 12px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+                  <span style={{ fontSize: 12, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {file.name}
+                  </span>
+                  <span style={{ fontSize: 11, color: file.error ? "#ff4444" : "var(--muted)", flexShrink: 0 }}>
+                    {file.uploading ? "Uploading…" : file.error ? file.error : "✓ Ready"}
+                  </span>
                 </div>
-              );
-            })}
+                <button
+                  type="button"
+                  onClick={() => removeFile(i)}
+                  style={{ fontSize: 12, color: "#ff4444", background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0, fontFamily: "inherit" }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
           </div>
         </div>
 
