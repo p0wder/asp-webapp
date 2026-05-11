@@ -7,8 +7,10 @@ import {
   createLineItemGroup,
   createLineItem,
   createImprint,
-  createImprintMockup,
   createLineItemMockup,
+  findProductId,
+  getLineItemGroupPricing,
+  updateLineItemPrice,
 } from '@/lib/printavo';
 import { calcUnitCost } from '@/lib/pricing';
 
@@ -17,6 +19,23 @@ const QUOTE_STATUS_ID = '256246';
 
 // Printavo category ID for Screen Printing (from original code)
 const SCREEN_PRINTING_CATEGORY_ID = '178403';
+
+// Map ink color count to pricingMatrixColumn ID (Screen Printing 2026 matrix)
+const SCREEN_PRINTING_COLUMN_IDS = {
+  1: '31382632',
+  2: '31382633',
+  3: '31382634',
+  4: '31382635',
+  5: '31382636',
+  6: '31382637',
+};
+
+// Map decorationMethod to typeOfWork ID
+const TYPE_OF_WORK_IDS = {
+  'Screen Printing': '11802',
+  'Embroidery': '11803',
+  'DTF': '14172',
+};
 
 export async function POST(request) {
   try {
@@ -38,6 +57,8 @@ export async function POST(request) {
       locations = [],
       locsEnabled = false,
       artworkUrls = [],
+      shirtQuality = '5000',
+      shirtColor = null,
       billingAddress = null,
       shippingAddress = null,
     } = body;
@@ -91,7 +112,6 @@ export async function POST(request) {
     }
 
     if (!contactId) {
-      // Customer not found — create a new one
       const newCustomer = await createCustomer({
         firstName: fname,
         lastName: lname || '',
@@ -104,13 +124,6 @@ export async function POST(request) {
     }
 
     // ── 2. Create the quote ──────────────────────────────────────────────────
-    const fullCustomerNote = [
-      customerNote,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    // Build CustomerAddressInput for quote (uses stateIso, zipCode, countryIso)
     const toQuoteAddress = (addr) => addr ? {
       address1: addr.address1 || null,
       address2: addr.address2 || null,
@@ -124,7 +137,7 @@ export async function POST(request) {
       contactId,
       nickname: resolvedJobName,
       customerDueAt: dueDate || null,
-      customerNote: fullCustomerNote,
+      customerNote: customerNote || null,
       productionNote,
       billingAddress: toQuoteAddress(billingAddress),
       shippingAddress: toQuoteAddress(shippingAddress),
@@ -147,18 +160,30 @@ export async function POST(request) {
 
     // ── 5. Create line item groups + line items (one group per garment type) ─
     const mockupUrls = artworkUrls.filter((f) => f.url).map((f) => f.url);
+    const typeOfWorkId = TYPE_OF_WORK_IDS[decorationMethod] || null;
 
     for (let gi = 0; gi < garmentTypes.length; gi++) {
       const garmentType = garmentTypes[gi];
       const group = await createLineItemGroup(quoteId, gi + 1);
 
-      // Create the line item with category set to Screen Printing category
+      // Look up the product in the Printavo catalog to link S&S Activewear pricing
+      let productId = null;
+      try {
+        productId = await findProductId(shirtQuality || '5000', shirtColor || null);
+      } catch {
+        // Non-fatal
+      }
+
+      // Create the line item
       const lineItem = await createLineItem({
         lineItemGroupId: group.id,
         description: garmentType,
         quantity: parsedQty,
         price: resolvedUnitCost,
         categoryId: SCREEN_PRINTING_CATEGORY_ID,
+        itemNumber: shirtQuality || '5000',
+        color: shirtColor || null,
+        productId: productId || null,
         position: 1,
       });
 
@@ -174,29 +199,61 @@ export async function POST(request) {
       }
 
       // ── 7. Create imprints per group (print locations) ────────────────────
+      const imprintInputs = [];
+
       if (locsEnabled && locations.length > 0) {
         for (let li = 0; li < locations.length; li++) {
           const loc = locations[li];
+          const locColors = parseInt(loc.colors) || 1;
           const locDetails = [
             loc.name,
-            `${loc.colors} color${loc.colors > 1 ? 's' : ''}`,
+            `${locColors} color${locColors > 1 ? 's' : ''}`,
             loc.art || null,
           ]
             .filter(Boolean)
             .join(' — ');
 
+          const colId = decorationMethod === 'Screen Printing'
+            ? (SCREEN_PRINTING_COLUMN_IDS[Math.min(locColors, 6)] || null)
+            : null;
+
           await createImprint({
             lineItemGroupId: group.id,
             details: locDetails,
+            typeOfWorkId,
+            pricingMatrixColumnId: colId,
+          });
+
+          imprintInputs.push({
+            details: locDetails,
+            typeOfWork: typeOfWorkId ? { id: typeOfWorkId } : undefined,
+            pricingMatrixColumn: colId ? { id: colId } : undefined,
           });
         }
       } else if (gi === 0 && decorationMethod) {
-        // No specific locations — create a single imprint for the decoration method
+        const colId = decorationMethod === 'Screen Printing'
+          ? (SCREEN_PRINTING_COLUMN_IDS[Math.min(parsedInkColors, 6)] || null)
+          : null;
+
         await createImprint({
           lineItemGroupId: group.id,
           details: decorationMethod,
+          typeOfWorkId,
+          pricingMatrixColumnId: colId,
+        });
+
+        imprintInputs.push({
+          details: decorationMethod,
+          typeOfWork: typeOfWorkId ? { id: typeOfWorkId } : undefined,
+          pricingMatrixColumn: colId ? { id: colId } : undefined,
         });
       }
+
+      // NOTE: We intentionally do NOT call updateLineItemPrice here.
+      // The lineItemGroupPricing query only returns the product markup portion ($3.58),
+      // not the full price including print cost. Applying that signature would overwrite
+      // our correct calcUnitCost() price ($9.45) with just the product cost.
+      // The price set on the line item from calcUnitCost() is already correct.
     }
 
     return NextResponse.json({

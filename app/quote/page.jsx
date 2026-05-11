@@ -7,6 +7,12 @@ import { calcUnitCost } from "@/lib/pricing";
 // ─── Config ────────────────────────────────────────────────────────────────
 const CATEGORY_ID = "178403";
 
+// ─── Shirt quality options ─────────────────────────────────────────────────
+const SHIRT_QUALITIES = [
+  { label: "Standard", itemNumber: "5000" },
+  { label: "Premium", itemNumber: "6210" },
+];
+
 // ─── Pricing Matrix (2026) ─────────────────────────────────────────────────
 
 const GARMENT_TYPES = ["T-Shirt", "Hoodie", "Sweatshirt", "Long Sleeve", "Headwear"];
@@ -114,6 +120,8 @@ export default function QuoteForm() {
       qty: "",
       decorationMethod: "Screen Printing",
       inkColors: 1,
+      shirtQuality: "5000",
+      shirtColor: "",
       jobName: "",
       notes: "",
       mailingList: true,
@@ -229,6 +237,8 @@ export default function QuoteForm() {
           decorationMethod: data.decorationMethod,
           inkColors: data.inkColors,
           qty: data.qty,
+          shirtQuality: data.shirtQuality || "5000",
+          shirtColor: data.shirtColor || null,
           garmentTypes: selectedGarments,
           locations: locsEnabled ? data.locations : [],
           locsEnabled,
@@ -487,6 +497,25 @@ export default function QuoteForm() {
           {submitError && submitError.includes("garment") && (
             <p style={{ ...errMsg, marginBottom: 8 }}>{submitError}</p>
           )}
+
+          <div style={twoCol}>
+            <div>
+              <label style={fieldLabel}>Shirt quality</label>
+              <select style={inputBase} {...register("shirtQuality")}>
+                {SHIRT_QUALITIES.map((q) => (
+                  <option key={q.itemNumber} value={q.itemNumber}>{q.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={fieldLabel}>Shirt color</label>
+              <input
+                style={inputBase}
+                placeholder="e.g. Black, White, Navy"
+                {...register("shirtColor")}
+              />
+            </div>
+          </div>
 
           <div style={{ marginBottom: 14 }}>
             <label style={fieldLabel}>Decoration method *</label>
