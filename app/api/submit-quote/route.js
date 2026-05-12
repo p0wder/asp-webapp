@@ -9,10 +9,9 @@ import {
   createImprint,
   createLineItemMockup,
   findProductId,
-  getLineItemGroupPricing,
-  updateLineItemPrice,
 } from '@/lib/printavo';
 import { calcUnitCost } from '@/lib/pricing';
+import { fetchSSProduct } from '@/lib/ssActivewear';
 
 // Printavo status ID for "Quote"
 const QUOTE_STATUS_ID = '256246';
@@ -152,13 +151,38 @@ export async function POST(request) {
       console.warn('Could not set quote status:', err.message);
     }
 
-    // ── 4. Calculate unit cost from pricing matrix ───────────────────────────
+    // ── 4. Get garment wholesale cost from S&S Activewear (or mock data) ─────
     const parsedQty = parseInt(qty) || 1;
     const parsedInkColors = parseInt(inkColors) || 1;
-    const unitCost = calcUnitCost(parsedQty, parsedInkColors, locsEnabled, locations);
-    const resolvedUnitCost = unitCost != null ? parseFloat(unitCost.toFixed(2)) : 0;
+    const styleNumber = shirtQuality || '5000';
 
-    // ── 5. Create line item groups + line items (one group per garment type) ─
+    // TODO: Once real S&S API key is set, this will use live pricing.
+    // Currently falls back to mock data in lib/ssActivewear.js.
+    let garmentCost = 0;
+    try {
+      const ssProducts = await fetchSSProduct(styleNumber);
+      // Use the lowest customerPrice across all variants for this style
+      const prices = ssProducts
+        .map((v) => v.customerPrice ?? v.piecePrice ?? null)
+        .filter((p) => p != null);
+      if (prices.length > 0) {
+        garmentCost = Math.min(...prices);
+      }
+      console.log(`[submit-quote] style=${styleNumber} garmentCost=$${garmentCost} (isMock=${!process.env.SS_ACTIVEWEAR_USERNAME})`);
+    } catch (err) {
+      console.warn(`[submit-quote] Could not fetch S&S garment cost for ${styleNumber}:`, err.message);
+    }
+
+    // ── 5. Calculate decoration cost from pricing matrix ─────────────────────
+    // Printavo shows: "$3.58 ($3.11 Product * 115% Markup) + $5.39 (Print Cost)"
+    // We set the line item price = garmentCost + decorationCost (the full sell price per unit)
+    // Printavo's markupPercentage handles the product cost markup display separately.
+    const decorationCost = calcUnitCost(parsedQty, parsedInkColors, locsEnabled, locations) ?? 0;
+    const resolvedUnitCost = parseFloat((garmentCost + decorationCost).toFixed(2));
+
+    console.log(`[submit-quote] qty=${parsedQty} garment=$${garmentCost} decoration=$${decorationCost} unitPrice=$${resolvedUnitCost} total=$${(resolvedUnitCost * parsedQty).toFixed(2)}`);
+
+    // ── 6. Create line item groups + line items (one group per garment type) ─
     const mockupUrls = artworkUrls.filter((f) => f.url).map((f) => f.url);
     const typeOfWorkId = TYPE_OF_WORK_IDS[decorationMethod] || null;
 
@@ -169,21 +193,23 @@ export async function POST(request) {
       // Look up the product in the Printavo catalog to link S&S Activewear pricing
       let productId = null;
       try {
-        productId = await findProductId(shirtQuality || '5000', shirtColor || null);
+        productId = await findProductId(styleNumber, shirtColor || null);
       } catch {
         // Non-fatal
       }
 
-      // Create the line item
+      // Create the line item with the full sell price (garment + decoration)
+      // markupPercentage: 15 = 115% total (Printavo default markup on product cost)
       const lineItem = await createLineItem({
         lineItemGroupId: group.id,
         description: garmentType,
         quantity: parsedQty,
         price: resolvedUnitCost,
         categoryId: SCREEN_PRINTING_CATEGORY_ID,
-        itemNumber: shirtQuality || '5000',
+        itemNumber: styleNumber,
         color: shirtColor || null,
         productId: productId || null,
+        markupPercentage: 15,
         position: 1,
       });
 
