@@ -405,36 +405,36 @@ export default function QuoteForm() {
               })}
             </div>
 
-            {/* Color + Qty */}
-            <div style={twoCol}>
-              <div>
-                <label style={fieldLabel}>Shirt color</label>
-                <input style={inputBase} placeholder="e.g. Black, White, Navy" {...register("shirtColor")} />
+            {/* Color */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={fieldLabel}>Shirt color</label>
+              <input style={inputBase} placeholder="e.g. Black, White, Navy" {...register("shirtColor")} />
+            </div>
+
+            {/* Quantity row */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
+                <label style={{ ...fieldLabel, margin: 0 }}>Quantity *</label>
+                <button
+                  type="button"
+                  onClick={() => setSizeBreakdown((v) => !v)}
+                  style={{
+                    fontSize: 11, color: sizeBreakdown ? "var(--accent)" : "var(--muted)",
+                    background: "none", border: `1px solid ${sizeBreakdown ? "var(--accent)" : "var(--border)"}`,
+                    borderRadius: 20, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit",
+                    transition: "all 0.15s", whiteSpace: "nowrap",
+                  }}
+                >
+                  Know exact sizes?
+                </button>
               </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-                  <label style={{ ...fieldLabel, margin: 0 }}>Quantity *</label>
-                  <button
-                    type="button"
-                    onClick={() => setSizeBreakdown((v) => !v)}
-                    style={{
-                      fontSize: 11, color: sizeBreakdown ? "var(--accent)" : "var(--muted)",
-                      background: "none", border: `1px solid ${sizeBreakdown ? "var(--accent)" : "var(--border)"}`,
-                      borderRadius: 20, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    Know exact sizes?
-                  </button>
-                </div>
-                {!sizeBreakdown && (
-                  <>
-                    <input type="number" min="1" style={errors.qty ? inputErr : inputBase} placeholder="e.g. 48"
-                      {...register("qty", { required: "Quantity is required", min: { value: 1, message: "Must be at least 1" } })} />
-                    {errors.qty && <p style={errMsg}>{errors.qty.message}</p>}
-                  </>
-                )}
-              </div>
+              {!sizeBreakdown && (
+                <>
+                  <input type="number" min="1" style={errors.qty ? inputErr : inputBase} placeholder="e.g. 48"
+                    {...register("qty", { required: "Quantity is required", min: { value: 1, message: "Must be at least 1" } })} />
+                  {errors.qty && <p style={errMsg}>{errors.qty.message}</p>}
+                </>
+              )}
             </div>
 
             {/* Size breakdown grid */}
