@@ -177,7 +177,9 @@ export default function QuoteForm() {
     const qty = parseInt(watchedQty) || 0;
     if (qty < 1) return null;
     const styleData = garmentPricing[watchedShirtQuality];
-    const garmentCost = styleData?.customerPrice ?? null;
+    const wholesaleGarmentCost = styleData?.customerPrice ?? null;
+    // Apply 115% markup to the wholesale garment cost (same as Printavo)
+    const garmentCost = wholesaleGarmentCost != null ? wholesaleGarmentCost * 1.15 : null;
     const decorationCost = calcUnitCost(qty, watchedInkColors, locsEnabled, watchedLocations);
     if (garmentCost == null && decorationCost == null) return null;
     const unitPrice = (garmentCost ?? 0) + (decorationCost ?? 0);

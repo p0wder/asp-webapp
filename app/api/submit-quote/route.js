@@ -11,7 +11,7 @@ import {
   findProductId,
 } from '@/lib/printavo';
 import { calcUnitCost } from '@/lib/pricing';
-import { fetchSSProduct } from '@/lib/ssActivewear';
+import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
 
 // Printavo status ID for "Quote"
 const QUOTE_STATUS_ID = '256246';
@@ -151,36 +151,36 @@ export async function POST(request) {
       console.warn('Could not set quote status:', err.message);
     }
 
-    // ── 4. Get garment wholesale cost from S&S Activewear (or mock data) ─────
+    // ── 4. Get garment wholesale cost from S&S Activewear ────────────────────
     const parsedQty = parseInt(qty) || 1;
     const parsedInkColors = parseInt(inkColors) || 1;
     const styleNumber = shirtQuality || '5000';
 
-    // TODO: Once real S&S API key is set, this will use live pricing.
-    // Currently falls back to mock data in lib/ssActivewear.js.
-    let garmentCost = 0;
+    let wholesaleGarmentCost = 0;
     try {
-      const ssProducts = await fetchSSProduct(styleNumber);
+      const ssProducts = await fetchSSProductsByStyleNumbers(styleNumber);
       // Use the lowest customerPrice across all variants for this style
       const prices = ssProducts
         .map((v) => v.customerPrice ?? v.piecePrice ?? null)
         .filter((p) => p != null);
       if (prices.length > 0) {
-        garmentCost = Math.min(...prices);
+        wholesaleGarmentCost = Math.min(...prices);
       }
-      console.log(`[submit-quote] style=${styleNumber} garmentCost=$${garmentCost} (isMock=${!process.env.SS_ACTIVEWEAR_USERNAME})`);
+      console.log(`[submit-quote] style=${styleNumber} wholesaleGarmentCost=$${wholesaleGarmentCost}`);
     } catch (err) {
       console.warn(`[submit-quote] Could not fetch S&S garment cost for ${styleNumber}:`, err.message);
     }
 
-    // ── 5. Calculate decoration cost from pricing matrix ─────────────────────
-    // Printavo shows: "$3.58 ($3.11 Product * 115% Markup) + $5.39 (Print Cost)"
-    // We set the line item price = garmentCost + decorationCost (the full sell price per unit)
-    // Printavo's markupPercentage handles the product cost markup display separately.
-    const decorationCost = calcUnitCost(parsedQty, parsedInkColors, locsEnabled, locations) ?? 0;
-    const resolvedUnitCost = parseFloat((garmentCost + decorationCost).toFixed(2));
+    // Apply 115% markup to the wholesale garment cost (matching Printavo's display)
+    const garmentCostWithMarkup = parseFloat((wholesaleGarmentCost * 1.15).toFixed(2));
 
-    console.log(`[submit-quote] qty=${parsedQty} garment=$${garmentCost} decoration=$${decorationCost} unitPrice=$${resolvedUnitCost} total=$${(resolvedUnitCost * parsedQty).toFixed(2)}`);
+    // ── 5. Calculate decoration cost from pricing matrix ─────────────────────
+    // Unit sell price = garment (with 115% markup) + decoration cost from matrix
+    const decorationCost = calcUnitCost(parsedQty, parsedInkColors, locsEnabled, locations) ?? 0;
+    const resolvedUnitCost = parseFloat((garmentCostWithMarkup + decorationCost).toFixed(2));
+    const resolvedTotal = parseFloat((resolvedUnitCost * parsedQty).toFixed(2));
+
+    console.log(`[submit-quote] qty=${parsedQty} wholesale=$${wholesaleGarmentCost} garment(115%)=$${garmentCostWithMarkup} decoration=$${decorationCost} unitPrice=$${resolvedUnitCost} total=$${resolvedTotal}`);
 
     // ── 6. Create line item groups + line items (one group per garment type) ─
     const mockupUrls = artworkUrls.filter((f) => f.url).map((f) => f.url);
@@ -198,8 +198,8 @@ export async function POST(request) {
         // Non-fatal
       }
 
-      // Create the line item with the full sell price (garment + decoration)
-      // markupPercentage: 15 = 115% total (Printavo default markup on product cost)
+      // Create the line item with the full sell price (garment w/ 115% markup + decoration)
+      // markupPercentage: 115 tells Printavo the product cost is marked up 115%
       const lineItem = await createLineItem({
         lineItemGroupId: group.id,
         description: garmentType,
@@ -209,7 +209,7 @@ export async function POST(request) {
         itemNumber: styleNumber,
         color: shirtColor || null,
         productId: productId || null,
-        markupPercentage: 15,
+        markupPercentage: 115,
         position: 1,
       });
 
@@ -275,11 +275,6 @@ export async function POST(request) {
         });
       }
 
-      // NOTE: We intentionally do NOT call updateLineItemPrice here.
-      // The lineItemGroupPricing query only returns the product markup portion ($3.58),
-      // not the full price including print cost. Applying that signature would overwrite
-      // our correct calcUnitCost() price ($9.45) with just the product cost.
-      // The price set on the line item from calcUnitCost() is already correct.
     }
 
     return NextResponse.json({
