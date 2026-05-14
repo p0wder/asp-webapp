@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { gql } from '@/lib/printavo';
 
 // Printavo status ID for "Ready to Order"
@@ -11,6 +13,12 @@ const READY_TO_ORDER_STATUS_ID = '256605';
  * Includes payment status (paidInFull, amountPaid, amountOutstanding).
  */
 export async function GET() {
+  // ── Auth guard: admin session required ──────────────────────────────────
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const data = await gql(
       `query ReadyToOrderInvoices($statusIds: [ID!]) {

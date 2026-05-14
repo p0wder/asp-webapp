@@ -2,6 +2,19 @@ import { NextResponse } from 'next/server';
 import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
 
 /**
+ * Returns true if the request originates from the app's own frontend.
+ * Checks the Origin header against NEXTAUTH_URL (falls back to allowing
+ * localhost in development when NEXTAUTH_URL is not set).
+ */
+function isSameOrigin(request) {
+  const origin = request.headers.get('origin');
+  if (!origin) return false; // server-to-server requests with no Origin header are blocked
+  const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  // Allow exact match or localhost variants in development
+  return origin === appUrl || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+}
+
+/**
  * GET /api/garment-pricing?styles=5000,6210
  *
  * Fetches live wholesale pricing from S&S Activewear for one or more style numbers.
@@ -25,6 +38,11 @@ import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
  * Printavo: customerPrice = product cost, markup is applied on top.
  */
 export async function GET(request) {
+  // ── Origin guard: only allow requests from this app's frontend ──────────
+  if (!isSameOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const { searchParams } = new URL(request.url);
   const styles = searchParams.get('styles');
 
