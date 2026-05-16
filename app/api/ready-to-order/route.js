@@ -22,7 +22,7 @@ export async function GET() {
   try {
     const data = await gql(
       `query ReadyToOrderInvoices($statusIds: [ID!]) {
-        invoices(first: 25, statusIds: $statusIds) {
+        invoices(first: 4, statusIds: $statusIds) {
           nodes {
             id
             visualId
@@ -49,6 +49,25 @@ export async function GET() {
               lastName
               email
               phone
+            }
+            lineItemGroups {
+              nodes {
+                id
+                lineItems {
+                  nodes {
+                    id
+                    description
+                    itemNumber
+                    color
+                    price
+                    items
+                    sizes {
+                      size
+                      count
+                    }
+                  }
+                }
+              }
             }
           }
           pageInfo {

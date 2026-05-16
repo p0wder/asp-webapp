@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react';
 
-const PRINTAVO_BASE = 'https://www.printavo.com/orders';
-
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount ?? 0);
 }
@@ -14,7 +12,27 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function PaidBadge({ paidInFull, amountPaid, amountOutstanding }) {
+// Canonical size order for display
+const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+
+// Map Printavo size enum values → display labels
+function sizeLabel(sizeEnum) {
+  const map = {
+    size_xs: 'XS',
+    size_s: 'S',
+    size_m: 'M',
+    size_l: 'L',
+    size_xl: 'XL',
+    size_2xl: '2XL',
+    size_3xl: '3XL',
+    size_4xl: '4XL',
+    size_5xl: '5XL',
+    size_other: 'Other',
+  };
+  return map[sizeEnum] || sizeEnum;
+}
+
+function PaidBadge({ paidInFull }) {
   if (paidInFull) {
     return (
       <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-green-500 text-white">
@@ -29,133 +47,264 @@ function PaidBadge({ paidInFull, amountPaid, amountOutstanding }) {
   );
 }
 
+function OrderOverview({ lineItemGroups }) {
+  if (!lineItemGroups?.nodes?.length) {
+    return (
+      <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
+        No line items found for this invoice.
+      </p>
+    );
+  }
+
+  // Flatten all line items across all groups
+  const allLineItems = lineItemGroups.nodes.flatMap(
+    (group) => group.lineItems?.nodes || []
+  );
+
+  if (!allLineItems.length) {
+    return (
+      <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
+        No line items found for this invoice.
+      </p>
+    );
+  }
+
+  // Collect all sizes that appear across all line items (for column headers)
+  const usedSizes = new Set();
+  allLineItems.forEach((li) => {
+    (li.sizes || []).forEach((s) => {
+      if (s.count > 0) usedSizes.add(sizeLabel(s.size));
+    });
+  });
+  const sizeColumns = SIZE_ORDER.filter((s) => usedSizes.has(s));
+  // Add "Other" at the end if present
+  if (usedSizes.has('Other')) sizeColumns.push('Other');
+
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr style={{ borderBottom: '2px solid var(--border)' }}>
+            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Item #
+            </th>
+            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Color
+            </th>
+            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Description
+            </th>
+            {sizeColumns.map((s) => (
+              <th
+                key={s}
+                className="text-center py-2 px-2 font-semibold text-xs uppercase tracking-wide"
+                style={{ color: 'var(--muted)' }}
+              >
+                {s}
+              </th>
+            ))}
+            <th className="text-center py-2 px-2 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Qty
+            </th>
+            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Unit Price
+            </th>
+            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Total
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {allLineItems.map((li) => {
+            // Build a size → count map for this line item
+            const sizeMap = {};
+            (li.sizes || []).forEach((s) => {
+              sizeMap[sizeLabel(s.size)] = s.count;
+            });
+
+            const qty = li.items ?? (li.sizes || []).reduce((sum, s) => sum + (s.count || 0), 0);
+            const lineTotal = li.price != null && qty ? li.price * qty : null;
+
+            return (
+              <tr
+                key={li.id}
+                style={{ borderBottom: '1px solid var(--border)' }}
+                className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              >
+                <td className="py-2 pr-3 font-mono text-xs font-medium">
+                  {li.itemNumber || '—'}
+                </td>
+                <td className="py-2 pr-3 text-xs">
+                  {li.color || '—'}
+                </td>
+                <td className="py-2 pr-3 text-xs max-w-[200px]">
+                  {li.description || '—'}
+                </td>
+                {sizeColumns.map((s) => (
+                  <td key={s} className="py-2 px-2 text-center text-xs">
+                    {sizeMap[s] ? (
+                      <span className="font-medium">{sizeMap[s]}</span>
+                    ) : (
+                      <span style={{ color: 'var(--muted)' }}>—</span>
+                    )}
+                  </td>
+                ))}
+                <td className="py-2 px-2 text-center text-xs font-semibold">
+                  {qty || '—'}
+                </td>
+                <td className="py-2 pl-3 text-right text-xs">
+                  {li.price != null ? formatCurrency(li.price) : '—'}
+                </td>
+                <td className="py-2 pl-3 text-right text-xs font-semibold">
+                  {lineTotal != null ? formatCurrency(lineTotal) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function InvoiceCard({ invoice }) {
+  const [expanded, setExpanded] = useState(false);
+
   const customerName =
     invoice.contact?.fullName?.trim() ||
     [invoice.contact?.firstName, invoice.contact?.lastName].filter(Boolean).join(' ') ||
     invoice.contact?.email ||
     'Unknown Customer';
 
-  const printavoUrl = `${PRINTAVO_BASE}/${invoice.visualId}`;
-
   return (
     <div
-      className="rounded-xl border p-5 flex flex-col gap-3 shadow-sm"
+      className="rounded-xl border shadow-sm overflow-hidden"
       style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
     >
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <a
-            href={printavoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-lg font-bold hover:underline"
-            style={{ color: 'var(--accent)' }}
-          >
-            #{invoice.visualId}
-          </a>
-          {invoice.nickname && (
-            <span className="ml-2 text-sm" style={{ color: 'var(--muted)' }}>
-              {invoice.nickname}
+      {/* Card body */}
+      <div className="p-5 flex flex-col gap-3">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <span
+              className="text-lg font-bold"
+              style={{ color: 'var(--accent)' }}
+            >
+              #{invoice.visualId}
             </span>
+            {invoice.nickname && (
+              <span className="ml-2 text-sm" style={{ color: 'var(--muted)' }}>
+                {invoice.nickname}
+              </span>
+            )}
+          </div>
+          <PaidBadge paidInFull={invoice.paidInFull} />
+        </div>
+
+        {/* Customer */}
+        <div className="flex items-center gap-2 text-sm">
+          <span style={{ color: 'var(--muted)' }}>Customer:</span>
+          <span className="font-medium">{customerName}</span>
+          {invoice.contact?.email && (
+            <a
+              href={`mailto:${invoice.contact.email}`}
+              className="text-xs hover:underline"
+              style={{ color: 'var(--muted)' }}
+            >
+              {invoice.contact.email}
+            </a>
           )}
         </div>
-        <PaidBadge
-          paidInFull={invoice.paidInFull}
-          amountPaid={invoice.amountPaid}
-          amountOutstanding={invoice.amountOutstanding}
-        />
-      </div>
 
-      {/* Customer */}
-      <div className="flex items-center gap-2 text-sm">
-        <span style={{ color: 'var(--muted)' }}>Customer:</span>
-        <span className="font-medium">{customerName}</span>
-        {invoice.contact?.email && (
-          <a
-            href={`mailto:${invoice.contact.email}`}
-            className="text-xs hover:underline"
-            style={{ color: 'var(--muted)' }}
+        {/* Financials */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+          <div>
+            <div style={{ color: 'var(--muted)' }} className="text-xs uppercase tracking-wide mb-0.5">Total</div>
+            <div className="font-semibold text-base">{formatCurrency(invoice.total)}</div>
+          </div>
+          <div>
+            <div style={{ color: 'var(--muted)' }} className="text-xs uppercase tracking-wide mb-0.5">Paid</div>
+            <div className="font-semibold text-base" style={{ color: invoice.amountPaid > 0 ? '#22c55e' : 'inherit' }}>
+              {formatCurrency(invoice.amountPaid)}
+            </div>
+          </div>
+          <div>
+            <div style={{ color: 'var(--muted)' }} className="text-xs uppercase tracking-wide mb-0.5">Outstanding</div>
+            <div
+              className="font-semibold text-base"
+              style={{ color: invoice.amountOutstanding > 0 ? '#ef4444' : '#22c55e' }}
+            >
+              {formatCurrency(invoice.amountOutstanding)}
+            </div>
+          </div>
+        </div>
+
+        {/* Dates */}
+        <div className="flex gap-4 text-sm flex-wrap">
+          <div>
+            <span style={{ color: 'var(--muted)' }}>Due: </span>
+            <span className="font-medium">{formatDate(invoice.customerDueAt)}</span>
+          </div>
+          <div>
+            <span style={{ color: 'var(--muted)' }}>Created: </span>
+            <span>{formatDate(invoice.createdAt)}</span>
+          </div>
+        </div>
+
+        {/* Production note */}
+        {invoice.productionNote && (
+          <div
+            className="text-sm rounded-lg p-3 mt-1"
+            style={{ background: 'var(--background)', borderLeft: '3px solid var(--accent)' }}
           >
-            {invoice.contact.email}
-          </a>
+            <div className="text-xs uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>
+              Production Note
+            </div>
+            <div className="whitespace-pre-wrap">{invoice.productionNote}</div>
+          </div>
+        )}
+
+        {/* Customer note */}
+        {invoice.customerNote && (
+          <div
+            className="text-sm rounded-lg p-3 mt-1"
+            style={{ background: 'var(--background)', borderLeft: '3px solid var(--accent-alt)' }}
+          >
+            <div className="text-xs uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>
+              Customer Note
+            </div>
+            <div className="whitespace-pre-wrap">{invoice.customerNote}</div>
+          </div>
         )}
       </div>
 
-      {/* Financials */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-        <div>
-          <div style={{ color: 'var(--muted)' }} className="text-xs uppercase tracking-wide mb-0.5">Total</div>
-          <div className="font-semibold text-base">{formatCurrency(invoice.total)}</div>
-        </div>
-        <div>
-          <div style={{ color: 'var(--muted)' }} className="text-xs uppercase tracking-wide mb-0.5">Paid</div>
-          <div className="font-semibold text-base" style={{ color: invoice.amountPaid > 0 ? '#22c55e' : 'inherit' }}>
-            {formatCurrency(invoice.amountPaid)}
-          </div>
-        </div>
-        <div>
-          <div style={{ color: 'var(--muted)' }} className="text-xs uppercase tracking-wide mb-0.5">Outstanding</div>
-          <div
-            className="font-semibold text-base"
-            style={{ color: invoice.amountOutstanding > 0 ? '#ef4444' : '#22c55e' }}
-          >
-            {formatCurrency(invoice.amountOutstanding)}
-          </div>
-        </div>
-      </div>
-
-      {/* Dates */}
-      <div className="flex gap-4 text-sm flex-wrap">
-        <div>
-          <span style={{ color: 'var(--muted)' }}>Due: </span>
-          <span className="font-medium">{formatDate(invoice.customerDueAt)}</span>
-        </div>
-        <div>
-          <span style={{ color: 'var(--muted)' }}>Created: </span>
-          <span>{formatDate(invoice.createdAt)}</span>
-        </div>
-      </div>
-
-      {/* Production note */}
-      {invoice.productionNote && (
-        <div
-          className="text-sm rounded-lg p-3 mt-1"
-          style={{ background: 'var(--background)', borderLeft: '3px solid var(--accent)' }}
+      {/* Expand toggle */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+        style={{ borderTop: '1px solid var(--border)', color: 'var(--foreground)' }}
+        aria-expanded={expanded}
+      >
+        <span style={{ color: 'var(--muted)' }} className="text-xs uppercase tracking-wide font-semibold">
+          Order Overview
+        </span>
+        <span
+          className="transition-transform duration-200"
+          style={{ display: 'inline-block', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
         >
-          <div className="text-xs uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>
-            Production Note
-          </div>
-          <div className="whitespace-pre-wrap">{invoice.productionNote}</div>
+          ▾
+        </span>
+      </button>
+
+      {/* Expandable details */}
+      {expanded && (
+        <div
+          className="px-5 pb-5"
+          style={{ borderTop: '1px solid var(--border)', background: 'var(--background)' }}
+        >
+          <OrderOverview lineItemGroups={invoice.lineItemGroups} />
         </div>
       )}
-
-      {/* Customer note */}
-      {invoice.customerNote && (
-        <div
-          className="text-sm rounded-lg p-3 mt-1"
-          style={{ background: 'var(--background)', borderLeft: '3px solid var(--accent-alt)' }}
-        >
-          <div className="text-xs uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>
-            Customer Note
-          </div>
-          <div className="whitespace-pre-wrap">{invoice.customerNote}</div>
-        </div>
-      )}
-
-      {/* View in Printavo */}
-      <div className="mt-1">
-        <a
-          href={printavoUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs font-medium hover:underline"
-          style={{ color: 'var(--muted)' }}
-        >
-          View in Printavo →
-        </a>
-      </div>
     </div>
   );
 }
