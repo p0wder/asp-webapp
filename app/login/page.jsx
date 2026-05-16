@@ -34,6 +34,7 @@ function LoginForm() {
       setError('Invalid email or password.');
       setLoading(false);
     } else {
+      router.refresh();
       router.push(callbackUrl);
     }
   }
