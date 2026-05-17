@@ -316,6 +316,9 @@ export default function CheckoutPage() {
           {submitting ? 'Submitting to SS Activewear…' : 'Place Order'}
         </button>
         <p className="mt-3 text-xs text-center" style={{ color: 'var(--muted)' }}>
+          Total shown is garment cost only — shipping, surcharges, and taxes will be calculated by SS Activewear and reflected on their invoice.
+        </p>
+        <p className="mt-1 text-xs text-center" style={{ color: 'var(--muted)' }}>
           ⚠ Test mode: <code>testOrder: true</code> is hardcoded — no real charge will occur.
         </p>
       </div>
