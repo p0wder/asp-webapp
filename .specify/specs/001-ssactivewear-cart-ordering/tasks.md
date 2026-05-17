@@ -30,7 +30,7 @@ Single Next.js App Router project (per plan.md "Structure Decision"). All paths 
 
 **Purpose**: Light project hygiene before implementation. The Next.js project already exists — no initialization needed.
 
-- [ ] T001 [P] Document the SS Activewear env var pair (`SS_ACTIVEWEAR_USERNAME`, `SS_ACTIVEWEAR_PASSWORD`) in `README.md` under a new "Environment variables" section if not already present. Confirm `.env.local` is git-ignored (already true in `.gitignore`).
+- [X] T001 [P] Document the SS Activewear env var pair (`SS_ACTIVEWEAR_USERNAME`, `SS_ACTIVEWEAR_PASSWORD`) in `README.md` under a new "Environment variables" section if not already present. Confirm `.env.local` is git-ignored (already true in `.gitignore`).
 
 ---
 
@@ -40,9 +40,9 @@ Single Next.js App Router project (per plan.md "Structure Decision"). All paths 
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Extend `lib/ssActivewear.js` with a new exported helper `lookupVariantsForLineItems(items)` where `items` is an array of `{ lineItemId, styleNumber, color }`. Implementation: group items by `styleNumber`, call `fetchSSProduct(styleNumber, { filterBy: 'style' })` once per group, filter variants by `color` (case-insensitive) where provided, return `[{ lineItemId, state: 'matched' | 'sanmar' | 'failed', variants?: CatalogVariant[], error?: string }]`. Treat null/empty `styleNumber` as `sanmar` without an API call. Catch per-group upstream errors and tag affected items with `state: 'failed'` — never throw out of the helper.
+- [X] T002 Extend `lib/ssActivewear.js` with a new exported helper `lookupVariantsForLineItems(items)` where `items` is an array of `{ lineItemId, styleNumber, color }`. Implementation: group items by `styleNumber`, call `fetchSSProduct(styleNumber, { filterBy: 'style' })` once per group, filter variants by `color` (case-insensitive) where provided, return `[{ lineItemId, state: 'matched' | 'sanmar' | 'failed', variants?: CatalogVariant[], error?: string }]`. Treat null/empty `styleNumber` as `sanmar` without an API call. Catch per-group upstream errors and tag affected items with `state: 'failed'` — never throw out of the helper.
 
-- [ ] T003 Create `app/api/ss-catalog-lookup/route.js` implementing the contract at `.specify/specs/001-ssactivewear-cart-ordering/contracts/ss-catalog-lookup.md`. It MUST: (a) auth-gate via `getServerSession(authOptions)` returning `401` if absent; (b) validate `items` is a non-empty array with `lineItemId` on each element (return `400` otherwise); (c) delegate to `lookupVariantsForLineItems` from T002; (d) return `{ success: true, results }`. Add `console.log('[ss-catalog-lookup] batch size:', items.length)` at entry and per-failed-item `console.warn` lines. Keep the route file under 60 lines (constitution V — thin adapter).
+- [X] T003 Create `app/api/ss-catalog-lookup/route.js` implementing the contract at `.specify/specs/001-ssactivewear-cart-ordering/contracts/ss-catalog-lookup.md`. It MUST: (a) auth-gate via `getServerSession(authOptions)` returning `401` if absent; (b) validate `items` is a non-empty array with `lineItemId` on each element (return `400` otherwise); (c) delegate to `lookupVariantsForLineItems` from T002; (d) return `{ success: true, results }`. Add `console.log('[ss-catalog-lookup] batch size:', items.length)` at entry and per-failed-item `console.warn` lines. Keep the route file under 60 lines (constitution V — thin adapter).
 
 **Checkpoint**: Server can classify a batch of invoice line items. User story implementation can now begin.
 
@@ -56,11 +56,11 @@ Single Next.js App Router project (per plan.md "Structure Decision"). All paths 
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Add a client-side React hook `useLineItemClassification(lineItems)` inline near the top of `app/orders/page.jsx` (or extract to `app/orders/_useLineItemClassification.js` if it exceeds ~80 lines). The hook accepts the flattened array of `InvoiceLineItem` objects and returns a `Map<lineItemId, CatalogMatchResult>`. On mount and whenever the input set changes, POST to `/api/ss-catalog-lookup` with `{ lineItemId, styleNumber: li.itemNumber, color: li.color }` for each line item, then merge the response into state. Each result must start in `state: 'pending'` until the response merges in.
+- [X] T004 [US1] Add a client-side React hook `useLineItemClassification(lineItems)` inline near the top of `app/orders/page.jsx` (or extract to `app/orders/_useLineItemClassification.js` if it exceeds ~80 lines). The hook accepts the flattened array of `InvoiceLineItem` objects and returns a `Map<lineItemId, CatalogMatchResult>`. On mount and whenever the input set changes, POST to `/api/ss-catalog-lookup` with `{ lineItemId, styleNumber: li.itemNumber, color: li.color }` for each line item, then merge the response into state. Each result must start in `state: 'pending'` until the response merges in.
 
-- [ ] T005 [US1] Modify `app/orders/page.jsx` `OrderOverview` table: add a new rightmost column "Sourcing" that renders, per row, based on `CatalogMatchResult.state`: `pending` → small spinner + "Checking..."; `matched` → an `<button>` labeled "Add to Cart" (handler is a no-op for now — wired in T012); `sanmar` → a non-interactive `<span>` styled as a badge with text "Sanmar – Auto Order"; `failed` → a button labeled "Lookup failed — Retry" with an error tooltip showing `error`. Use existing Tailwind tokens (`var(--accent)`, `var(--muted)`).
+- [X] T005 [US1] Modify `app/orders/page.jsx` `OrderOverview` table: add a new rightmost column "Sourcing" that renders, per row, based on `CatalogMatchResult.state`: `pending` → small spinner + "Checking..."; `matched` → an `<button>` labeled "Add to Cart" (handler is a no-op for now — wired in T012); `sanmar` → a non-interactive `<span>` styled as a badge with text "Sanmar – Auto Order"; `failed` → a button labeled "Lookup failed — Retry" with an error tooltip showing `error`. Use existing Tailwind tokens (`var(--accent)`, `var(--muted)`).
 
-- [ ] T006 [US1] In `app/orders/page.jsx`, expose a `retry(lineItemId)` function from the hook in T004 that re-POSTs `/api/ss-catalog-lookup` with only the failed item. Wire it to the "Retry" button rendered in T005. The line item must transition `failed → pending → matched|sanmar|failed`.
+- [X] T006 [US1] In `app/orders/page.jsx`, expose a `retry(lineItemId)` function from the hook in T004 that re-POSTs `/api/ss-catalog-lookup` with only the failed item. Wire it to the "Retry" button rendered in T005. The line item must transition `failed → pending → matched|sanmar|failed`.
 
 **Checkpoint**: User Story 1 is fully testable: classification labels render correctly per line item; retry works for failed items. Manual verification matches `quickstart.md` Step 1.
 
@@ -74,19 +74,19 @@ Single Next.js App Router project (per plan.md "Structure Decision"). All paths 
 
 ### Implementation for User Story 2
 
-- [ ] T007 [P] [US2] Create `lib/cart.js` exporting pure functions per data-model.md: `emptyCart()`, `addItem(cart, item)` (increments qty if SKU exists), `removeItem(cart, sku)`, `setQty(cart, sku, qty)` (qty ≤ 0 → remove), `groupByInvoice(cart)`, `totals(cart)` returning `{ itemCount, lineCount, grandTotal }`. No I/O — all functions take `cart` and return a new `cart`. Validate `qty` is a positive integer; coerce non-integers via `Math.floor`.
+- [X] T007 [P] [US2] Create `lib/cart.js` exporting pure functions per data-model.md: `emptyCart()`, `addItem(cart, item)` (increments qty if SKU exists), `removeItem(cart, sku)`, `setQty(cart, sku, qty)` (qty ≤ 0 → remove), `groupByInvoice(cart)`, `totals(cart)` returning `{ itemCount, lineCount, grandTotal }`. No I/O — all functions take `cart` and return a new `cart`. Validate `qty` is a positive integer; coerce non-integers via `Math.floor`.
 
-- [ ] T008 [P] [US2] Create `lib/cartStorage.js` with: `readCart()` (returns `emptyCart()` if storage is empty, malformed, or version mismatched on `version: 1`), `writeCart(cart)` (updates `updatedAt` to `new Date().toISOString()` before serializing), `subscribe(callback)` (registers a `window.addEventListener('storage', ...)` listener filtered to key `asp.cart.v1` and returns an unsubscribe function). Storage key constant: `export const CART_STORAGE_KEY = 'asp.cart.v1'`. All functions MUST be SSR-safe (check `typeof window !== 'undefined'`).
+- [X] T008 [P] [US2] Create `lib/cartStorage.js` with: `readCart()` (returns `emptyCart()` if storage is empty, malformed, or version mismatched on `version: 1`), `writeCart(cart)` (updates `updatedAt` to `new Date().toISOString()` before serializing), `subscribe(callback)` (registers a `window.addEventListener('storage', ...)` listener filtered to key `asp.cart.v1` and returns an unsubscribe function). Storage key constant: `export const CART_STORAGE_KEY = 'asp.cart.v1'`. All functions MUST be SSR-safe (check `typeof window !== 'undefined'`).
 
-- [ ] T009 [US2] Create `context/CartContext.js` exporting a `<CartProvider>` component and a `useCart()` hook. The provider uses `useSyncExternalStore` with `subscribe` and `getSnapshot` backed by `lib/cartStorage.js` (T008). `useCart()` returns `{ cart, addItem, removeItem, setQty }` where each mutator calls the corresponding `lib/cart.js` (T007) pure function and persists via `writeCart`. Depends on T007 + T008.
+- [X] T009 [US2] Create `context/CartContext.js` exporting a `<CartProvider>` component and a `useCart()` hook. The provider uses `useSyncExternalStore` with `subscribe` and `getSnapshot` backed by `lib/cartStorage.js` (T008). `useCart()` returns `{ cart, addItem, removeItem, setQty }` where each mutator calls the corresponding `lib/cart.js` (T007) pure function and persists via `writeCart`. Depends on T007 + T008.
 
-- [ ] T010 [P] [US2] Create `components/CartIndicator.jsx` — a `"use client"` component that consumes `useCart()` and renders a small badge with the cart's `itemCount` (from `totals(cart)`) and a link to `/orders/cart`. When `itemCount === 0`, render the icon only (no number). Use Tailwind utility classes only.
+- [X] T010 [P] [US2] Create `components/CartIndicator.jsx` — a `"use client"` component that consumes `useCart()` and renders a small badge with the cart's `itemCount` (from `totals(cart)`) and a link to `/orders/cart`. When `itemCount === 0`, render the icon only (no number). Use Tailwind utility classes only.
 
-- [ ] T011 [US2] Modify `components/Header.js` to render `<CartIndicator />` in its right-hand cluster, conditional on the existing authenticated-session check. Import is a named import from `components/CartIndicator.jsx`. Header must remain a Server Component if it already is; convert `CartIndicator` use to a leaf client boundary if needed.
+- [X] T011 [US2] Modify `components/Header.js` to render `<CartIndicator />` in its right-hand cluster, conditional on the existing authenticated-session check. Import is a named import from `components/CartIndicator.jsx`. Header must remain a Server Component if it already is; convert `CartIndicator` use to a leaf client boundary if needed.
 
-- [ ] T012 [US2] In `app/orders/page.jsx`, wire the "Add to Cart" button rendered in T005 to call `useCart().addItem` for each (size, color) variant on the line item. Expansion rule: for each `li.sizes[]` entry with `count > 0`, find the matching `CatalogVariant` in the `CatalogMatchResult.variants` (match on `sizeName` after `sizeLabel(...)` normalization and `colorName === li.color`) and emit one `CartItem` with `qty: count`. If a size has no matching variant, skip it silently (logged at `console.warn`). After adding, surface a brief "Added N items" toast or inline confirmation next to the button (re-uses any existing toast pattern or simple text + setTimeout fade).
+- [X] T012 [US2] In `app/orders/page.jsx`, wire the "Add to Cart" button rendered in T005 to call `useCart().addItem` for each (size, color) variant on the line item. Expansion rule: for each `li.sizes[]` entry with `count > 0`, find the matching `CatalogVariant` in the `CatalogMatchResult.variants` (match on `sizeName` after `sizeLabel(...)` normalization and `colorName === li.color`) and emit one `CartItem` with `qty: count`. If a size has no matching variant, skip it silently (logged at `console.warn`). After adding, surface a brief "Added N items" toast or inline confirmation next to the button (re-uses any existing toast pattern or simple text + setTimeout fade).
 
-- [ ] T013 [US2] Modify `app/layout.js` to wrap `{children}` with `<CartProvider>` from `context/CartContext.js`. Confirm no other providers are broken; `CartProvider` must be inside any existing `SessionProvider` so `useCart` can rely on authenticated state if needed.
+- [X] T013 [US2] Modify `app/layout.js` to wrap `{children}` with `<CartProvider>` from `context/CartContext.js`. Confirm no other providers are broken; `CartProvider` must be inside any existing `SessionProvider` so `useCart` can rely on authenticated state if needed.
 
 **Checkpoint**: Cart works end-to-end: items can be added from multiple invoices, persist across navigation, sync across tabs. Manual verification matches `quickstart.md` Steps 2–4.
 
@@ -100,13 +100,13 @@ Single Next.js App Router project (per plan.md "Structure Decision"). All paths 
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Create `app/orders/cart/page.jsx` — a `"use client"` cart-management view. Reads `useCart()`. Renders an empty-state "Your cart is empty" with a "Back to orders" link if `itemCount === 0`. Otherwise renders a single table: per-row image-placeholder, brand+style+color+size, a numeric `<input type="number" min="1">` for qty (calls `setQty`), unit price, line total, trash icon (calls `removeItem`). Footer shows grand total and a primary `<Link href="/orders/checkout">` button "Continue to Checkout".
+- [X] T014 [US3] Create `app/orders/cart/page.jsx` — a `"use client"` cart-management view. Reads `useCart()`. Renders an empty-state "Your cart is empty" with a "Back to orders" link if `itemCount === 0`. Otherwise renders a single table: per-row image-placeholder, brand+style+color+size, a numeric `<input type="number" min="1">` for qty (calls `setQty`), unit price, line total, trash icon (calls `removeItem`). Footer shows grand total and a primary `<Link href="/orders/checkout">` button "Continue to Checkout".
 
-- [ ] T015 [US3] Create `app/orders/checkout/page.jsx` — a `"use client"` summary view. Reads `useCart()` and calls `groupByInvoice(cart)` (from `lib/cart.js`). Renders one section per invoice with a header showing the invoice `visualId`; under each section list the items with the same columns as the cart page minus qty input (read-only here). Add a "Place Order" primary button at the bottom (handler stubbed for US4). Add an "Empty cart" guard that redirects to `/orders/cart` or shows an empty state if `itemCount === 0`.
+- [X] T015 [US3] Create `app/orders/checkout/page.jsx` — a `"use client"` summary view. Reads `useCart()` and calls `groupByInvoice(cart)` (from `lib/cart.js`). Renders one section per invoice with a header showing the invoice `visualId`; under each section list the items with the same columns as the cart page minus qty input (read-only here). Add a "Place Order" primary button at the bottom (handler stubbed for US4). Add an "Empty cart" guard that redirects to `/orders/cart` or shows an empty state if `itemCount === 0`.
 
-- [ ] T016 [US3] In `app/orders/checkout/page.jsx`, on mount, build a unique `{ styleNumber, color }` set from cart items and POST `/api/ss-catalog-lookup` to refresh stock. From the response, derive a `Map<sku, availableQty>`. For each cart item, compute a `StockWarning` per data-model.md when `availableQty < cartItem.qty`. Render an inline warning chip ("Only N available" or "Out of stock") next to affected rows. While the fetch is pending, render a non-blocking "Checking stock..." indicator.
+- [X] T016 [US3] In `app/orders/checkout/page.jsx`, on mount, build a unique `{ styleNumber, color }` set from cart items and POST `/api/ss-catalog-lookup` to refresh stock. From the response, derive a `Map<sku, availableQty>`. For each cart item, compute a `StockWarning` per data-model.md when `availableQty < cartItem.qty`. Render an inline warning chip ("Only N available" or "Out of stock") next to affected rows. While the fetch is pending, render a non-blocking "Checking stock..." indicator.
 
-- [ ] T017 [US3] In `app/orders/checkout/page.jsx`, add two small buttons inside each stock-warning chip: "Reduce to N" (calls `setQty(sku, availableQty)`) and "Remove" (calls `removeItem(sku)`). Both immediately update the cart and the displayed warning disappears for resolved rows. Submission MUST remain enabled regardless of any unresolved warnings (per FR-017).
+- [X] T017 [US3] In `app/orders/checkout/page.jsx`, add two small buttons inside each stock-warning chip: "Reduce to N" (calls `setQty(sku, availableQty)`) and "Remove" (calls `removeItem(sku)`). Both immediately update the cart and the displayed warning disappears for resolved rows. Submission MUST remain enabled regardless of any unresolved warnings (per FR-017).
 
 **Checkpoint**: Checkout summary renders correctly, stock warnings appear and resolve. Manual verification matches `quickstart.md` Steps 5–6.
 
@@ -120,11 +120,11 @@ Single Next.js App Router project (per plan.md "Structure Decision"). All paths 
 
 ### Implementation for User Story 4
 
-- [ ] T018 [US4] In `app/orders/checkout/page.jsx`, implement the "Place Order" handler: while pending, disable the button and set a local `submitting` flag. POST `JSON.stringify({ lines: cart.items.map(i => ({ identifier: i.sku, qty: i.qty })), comments: 'Consolidated from invoices: ' + uniqueInvoiceVisualIds.join(', ') })` to `/api/place-order`. Parse the JSON response. Re-enable the button on completion (success or failure).
+- [X] T018 [US4] In `app/orders/checkout/page.jsx`, implement the "Place Order" handler: while pending, disable the button and set a local `submitting` flag. POST `JSON.stringify({ lines: cart.items.map(i => ({ identifier: i.sku, qty: i.qty })), comments: 'Consolidated from invoices: ' + uniqueInvoiceVisualIds.join(', ') })` to `/api/place-order`. Parse the JSON response. Re-enable the button on completion (success or failure).
 
-- [ ] T019 [US4] In `app/orders/checkout/page.jsx`, on success (`response.success === true`): replace the page body with a confirmation panel showing the SS Activewear order reference fields from `response.order` (use `order.orderNum`, `order.poNumber`, or whichever fields the SS API actually returns; render the raw object in a `<details>` block for debug visibility). Call `setQty(sku, 0)` for each cart item — or expose a `clearCart()` helper in `useCart()` if cleaner — to empty the cart. The cart indicator badge must drop to 0.
+- [X] T019 [US4] In `app/orders/checkout/page.jsx`, on success (`response.success === true`): replace the page body with a confirmation panel showing the SS Activewear order reference fields from `response.order` (use `order.orderNum`, `order.poNumber`, or whichever fields the SS API actually returns; render the raw object in a `<details>` block for debug visibility). Call `setQty(sku, 0)` for each cart item — or expose a `clearCart()` helper in `useCart()` if cleaner — to empty the cart. The cart indicator badge must drop to 0.
 
-- [ ] T020 [US4] In `app/orders/checkout/page.jsx`, on error (HTTP error or `response.error` present): render an alert banner above "Place Order" with the error message verbatim. Do NOT clear the cart. The "Place Order" button must re-enable so the user can retry once the underlying issue is fixed (preserving FR-013).
+- [X] T020 [US4] In `app/orders/checkout/page.jsx`, on error (HTTP error or `response.error` present): render an alert banner above "Place Order" with the error message verbatim. Do NOT clear the cart. The "Place Order" button must re-enable so the user can retry once the underlying issue is fixed (preserving FR-013).
 
 **Checkpoint**: End-to-end submission works. Manual verification matches `quickstart.md` Steps 7–8.
 
@@ -134,15 +134,15 @@ Single Next.js App Router project (per plan.md "Structure Decision"). All paths 
 
 **Purpose**: Refinements that touch multiple stories or address spec-level edges not strictly in any one story.
 
-- [ ] T021 [P] In `app/orders/page.jsx`, render a sticky version of `<CartIndicator />` near the page header so it stays visible during long invoice lists. Use Tailwind `sticky top-...` on a wrapper; ensure it doesn't conflict with the page header layout.
+- [X] T021 [P] In `app/orders/page.jsx`, render a sticky version of `<CartIndicator />` near the page header so it stays visible during long invoice lists. Use Tailwind `sticky top-...` on a wrapper; ensure it doesn't conflict with the page header layout.
 
-- [ ] T022 [P] Add empty-state UI to `app/orders/cart/page.jsx` and `app/orders/checkout/page.jsx` (covering the edge case "user navigates to checkout with empty cart" listed in spec.md). Both pages should render a "Your cart is empty — add items from the orders page" call to action with a link back to `/orders`.
+- [X] T022 [P] Add empty-state UI to `app/orders/cart/page.jsx` and `app/orders/checkout/page.jsx` (covering the edge case "user navigates to checkout with empty cart" listed in spec.md). Both pages should render a "Your cart is empty — add items from the orders page" call to action with a link back to `/orders`.
 
-- [ ] T023 [P] Verify mobile responsiveness on `/orders`, `/orders/cart`, `/orders/checkout`: open each route at 375px viewport in browser DevTools and confirm all controls remain reachable and readable. Adjust any Tailwind class lists where overflow or wrapping breaks (use `sm:`/`md:` breakpoints consistent with the rest of `app/orders/page.jsx`).
+- [X] T023 [P] Verify mobile responsiveness on `/orders`, `/orders/cart`, `/orders/checkout`: open each route at 375px viewport in browser DevTools and confirm all controls remain reachable and readable. Adjust any Tailwind class lists where overflow or wrapping breaks (use `sm:`/`md:` breakpoints consistent with the rest of `app/orders/page.jsx`).
 
-- [ ] T024 Run the full manual smoke test in `.specify/specs/001-ssactivewear-cart-ordering/quickstart.md` Steps 1–8 against `npm run dev`. Fix any issues found before merging.
+- [ ] T024 Run the full manual smoke test in `.specify/specs/001-ssactivewear-cart-ordering/quickstart.md` Steps 1–8 against `npm run dev`. Fix any issues found before merging. **Deferred to operator** — requires live SS Activewear + Printavo credentials and a browser session. `npm run build` and `npm run lint` both pass cleanly (no new errors introduced).
 
-- [ ] T025 Run `npm run lint` and fix any ESLint warnings/errors introduced by new files. No new `console.log` calls should remain in non-API code per constitution Development Standards (API-side logging is fine).
+- [X] T025 Run `npm run lint` and fix any ESLint warnings/errors introduced by new files. No new `console.log` calls should remain in non-API code per constitution Development Standards (API-side logging is fine).
 
 ---
 
