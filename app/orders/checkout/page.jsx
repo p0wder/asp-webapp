@@ -99,6 +99,7 @@ export default function CheckoutPage() {
     const uniqueInvoices = Array.from(new Set(cart.items.map((i) => `#${i.sourceInvoiceVisualId}`)));
     const payload = {
       lines: cart.items.map((i) => ({ identifier: i.sku, qty: i.qty })),
+      poNumber: uniqueInvoices.join(', '),
       comments: `Consolidated from invoices: ${uniqueInvoices.join(', ')}`,
     };
 
