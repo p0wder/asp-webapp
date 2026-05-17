@@ -61,61 +61,52 @@ export default function CartPage() {
       </div>
 
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[640px]">
-          <thead style={{ borderBottom: '2px solid var(--border)' }}>
-            <tr>
-              <th className="text-left py-3 px-4 text-xs uppercase tracking-wide font-semibold" style={{ color: 'var(--muted)' }}>Item</th>
-              <th className="text-left py-3 px-4 text-xs uppercase tracking-wide font-semibold" style={{ color: 'var(--muted)' }}>Size / Color</th>
-              <th className="text-center py-3 px-4 text-xs uppercase tracking-wide font-semibold" style={{ color: 'var(--muted)' }}>Qty</th>
-              <th className="text-right py-3 px-4 text-xs uppercase tracking-wide font-semibold" style={{ color: 'var(--muted)' }}>Unit</th>
-              <th className="text-right py-3 px-4 text-xs uppercase tracking-wide font-semibold" style={{ color: 'var(--muted)' }}>Total</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {cart.items.map((item) => (
-              <tr key={item.sku} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td className="py-3 px-4">
-                  <div className="font-medium">{item.brandName} {item.styleNumber}</div>
-                  <div className="text-xs" style={{ color: 'var(--muted)' }}>{item.styleName}</div>
-                  <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-                    From invoice #{item.sourceInvoiceVisualId}
-                  </div>
-                </td>
-                <td className="py-3 px-4 text-xs">
-                  <div>{item.size}</div>
-                  <div style={{ color: 'var(--muted)' }}>{item.color}</div>
-                </td>
-                <td className="py-3 px-4 text-center">
-                  <input
-                    type="number"
-                    min="1"
-                    value={item.qty}
-                    onChange={(e) => setQty(item.sku, parseInt(e.target.value, 10) || 0)}
-                    className="w-16 px-2 py-1 rounded border text-center text-sm"
-                    style={{ background: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                  />
-                </td>
-                <td className="py-3 px-4 text-right text-xs">{formatCurrency(item.unitPrice)}</td>
-                <td className="py-3 px-4 text-right text-xs font-semibold">{formatCurrency((item.unitPrice || 0) * item.qty)}</td>
-                <td className="py-3 px-4 text-right">
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.sku)}
-                    aria-label={`Remove ${item.sku}`}
-                    className="text-sm hover:text-red-600 transition-colors"
-                    style={{ color: 'var(--muted)' }}
-                    title="Remove"
-                  >
-                    🗑
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+        {cart.items.map((item, idx) => (
+          <div
+            key={item.sku}
+            className="px-4 py-4 flex flex-col gap-2"
+            style={{ borderBottom: idx < cart.items.length - 1 ? '1px solid var(--border)' : 'none' }}
+          >
+            {/* Top row: item info + remove */}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-medium text-sm">{item.brandName} {item.styleNumber}</div>
+                <div className="text-xs" style={{ color: 'var(--muted)' }}>{item.styleName}</div>
+                <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>From invoice #{item.sourceInvoiceVisualId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeItem(item.sku)}
+                aria-label={`Remove ${item.sku}`}
+                className="text-sm hover:text-red-600 transition-colors flex-shrink-0"
+                style={{ color: 'var(--muted)' }}
+                title="Remove"
+              >
+                🗑
+              </button>
+            </div>
+            {/* Bottom row: size/color, qty input, price */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs" style={{ color: 'var(--muted)' }}>
+                {item.size} / {item.color}
+              </div>
+              <div className="flex items-center gap-3 ml-auto">
+                <input
+                  type="number"
+                  min="1"
+                  value={item.qty}
+                  onChange={(e) => setQty(item.sku, parseInt(e.target.value, 10) || 0)}
+                  className="w-16 px-2 py-1 rounded border text-center text-sm"
+                  style={{ background: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
+                />
+                <div className="text-xs text-right">
+                  <div style={{ color: 'var(--muted)' }}>{formatCurrency(item.unitPrice)} ea</div>
+                  <div className="font-semibold">{formatCurrency((item.unitPrice || 0) * item.qty)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="flex items-center justify-between mt-6 flex-wrap gap-4">
