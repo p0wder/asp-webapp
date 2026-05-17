@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
+import CartIndicator from '@/components/CartIndicator';
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -60,6 +61,7 @@ export default function Header() {
           >
             Get a Quote
           </Link>
+          <CartIndicator />
           <ThemeToggle />
         </nav>
 

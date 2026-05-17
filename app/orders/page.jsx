@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCart } from '@/context/CartContext';
+import { totals } from '@/lib/cart';
 
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount ?? 0);
@@ -32,6 +35,133 @@ function sizeLabel(sizeEnum) {
   return map[sizeEnum] || sizeEnum;
 }
 
+/**
+ * Batch-classify every line item across all loaded invoices against the SS Activewear catalog.
+ * Returns a map keyed by line-item id plus a retry function for failed items.
+ */
+function useLineItemClassification(lineItems) {
+  const [classifications, setClassifications] = useState(() => new Map());
+  const idSignature = useMemo(() => lineItems.map((li) => li.id).join('|'), [lineItems]);
+
+  const runLookup = useCallback(async (items) => {
+    if (items.length === 0) return;
+    setClassifications((prev) => {
+      const next = new Map(prev);
+      for (const li of items) next.set(li.id, { lineItemId: li.id, state: 'pending' });
+      return next;
+    });
+
+    try {
+      const res = await fetch('/api/ss-catalog-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((li) => ({
+            lineItemId: li.id,
+            styleNumber: li.itemNumber || null,
+            color: li.color || null,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Lookup failed');
+
+      setClassifications((prev) => {
+        const next = new Map(prev);
+        for (const r of data.results) next.set(r.lineItemId, r);
+        return next;
+      });
+    } catch (err) {
+      setClassifications((prev) => {
+        const next = new Map(prev);
+        for (const li of items) {
+          next.set(li.id, { lineItemId: li.id, state: 'failed', error: err.message });
+        }
+        return next;
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (lineItems.length === 0) return;
+    runLookup(lineItems);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idSignature, runLookup]);
+
+  const retry = useCallback(
+    (lineItemId) => {
+      const li = lineItems.find((x) => x.id === lineItemId);
+      if (li) runLookup([li]);
+    },
+    [lineItems, runLookup],
+  );
+
+  return { classifications, retry };
+}
+
+function SourcingCell({ lineItem, result, onAddToCart, onRetry }) {
+  const [justAdded, setJustAdded] = useState(0);
+  const state = result?.state || 'pending';
+
+  if (state === 'pending') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--muted)' }}>
+        <span className="inline-block animate-spin">⟳</span> Checking…
+      </span>
+    );
+  }
+
+  if (state === 'matched') {
+    if (justAdded > 0) {
+      return (
+        <span className="inline-flex items-center text-xs font-semibold text-green-600 dark:text-green-400">
+          ✓ Added {justAdded}
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          const n = onAddToCart(lineItem, result.variants);
+          if (n > 0) {
+            setJustAdded(n);
+            setTimeout(() => setJustAdded(0), 2000);
+          }
+        }}
+        className="px-3 py-1 rounded-md text-xs font-semibold transition-opacity hover:opacity-90"
+        style={{ background: 'var(--accent)', color: '#fff' }}
+      >
+        + Add to Cart
+      </button>
+    );
+  }
+
+  if (state === 'sanmar') {
+    return (
+      <span
+        className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+        title="Auto-routed to Sanmar — no manual action required"
+      >
+        Sanmar – Auto Order
+      </span>
+    );
+  }
+
+  // failed
+  return (
+    <button
+      type="button"
+      onClick={() => onRetry(lineItem.id)}
+      className="px-3 py-1 rounded-md text-xs font-semibold border border-red-500 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
+      title={result?.error || 'Lookup failed'}
+    >
+      ⚠ Lookup failed — Retry
+    </button>
+  );
+}
+
 function PaidBadge({ paidInFull }) {
   if (paidInFull) {
     return (
@@ -47,7 +177,7 @@ function PaidBadge({ paidInFull }) {
   );
 }
 
-function OrderOverview({ lineItemGroups }) {
+function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }) {
   if (!lineItemGroups?.nodes?.length) {
     return (
       <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
@@ -112,6 +242,9 @@ function OrderOverview({ lineItemGroups }) {
             <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
               Total
             </th>
+            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Sourcing
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -158,6 +291,14 @@ function OrderOverview({ lineItemGroups }) {
                 <td className="py-2 pl-3 text-right text-xs font-semibold">
                   {lineTotal != null ? formatCurrency(lineTotal) : '—'}
                 </td>
+                <td className="py-2 pl-3 text-right text-xs">
+                  <SourcingCell
+                    lineItem={li}
+                    result={classifications?.get(li.id)}
+                    onAddToCart={onAddToCart}
+                    onRetry={onRetry}
+                  />
+                </td>
               </tr>
             );
           })}
@@ -167,8 +308,12 @@ function OrderOverview({ lineItemGroups }) {
   );
 }
 
-function InvoiceCard({ invoice }) {
+function InvoiceCard({ invoice, classifications, onAddToCart, onRetry }) {
   const [expanded, setExpanded] = useState(false);
+  const onAddToCartBound = useCallback(
+    (lineItem, variants) => onAddToCart(invoice, lineItem, variants),
+    [invoice, onAddToCart],
+  );
 
   const customerName =
     invoice.contact?.fullName?.trim() ||
@@ -302,7 +447,12 @@ function InvoiceCard({ invoice }) {
           className="px-5 pb-5"
           style={{ borderTop: '1px solid var(--border)', background: 'var(--background)' }}
         >
-          <OrderOverview lineItemGroups={invoice.lineItemGroups} />
+          <OrderOverview
+            lineItemGroups={invoice.lineItemGroups}
+            classifications={classifications}
+            onAddToCart={onAddToCartBound}
+            onRetry={onRetry}
+          />
         </div>
       )}
     </div>
@@ -314,6 +464,56 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
+
+  // Flatten every line item across every loaded invoice into a single list for batch lookup
+  const allLineItems = useMemo(
+    () =>
+      invoices.flatMap((inv) =>
+        (inv.lineItemGroups?.nodes || []).flatMap((g) => g.lineItems?.nodes || []),
+      ),
+    [invoices],
+  );
+  const { classifications, retry } = useLineItemClassification(allLineItems);
+
+  const { cart, addItem } = useCart();
+  const cartTotals = totals(cart);
+
+  // Expand a Printavo line item into one CartItem per (size, color) variant
+  const handleAddToCart = useCallback(
+    (invoice, lineItem, variants) => {
+      let added = 0;
+      for (const sizeEntry of lineItem.sizes || []) {
+        if (!(sizeEntry.count > 0)) continue;
+        const sizeLbl = sizeLabel(sizeEntry.size);
+        const variant = variants.find(
+          (v) =>
+            (v.sizeName || '').trim().toUpperCase() === sizeLbl.toUpperCase() &&
+            (v.colorName || '').trim().toLowerCase() === (lineItem.color || '').trim().toLowerCase(),
+        );
+        if (!variant) {
+          console.warn('[orders] no SS variant for', lineItem.itemNumber, sizeLbl, lineItem.color);
+          continue;
+        }
+        addItem({
+          sku: variant.sku,
+          styleNumber: lineItem.itemNumber,
+          styleName: variant.styleName,
+          brandName: variant.brandName,
+          color: variant.colorName || lineItem.color,
+          size: variant.sizeName,
+          qty: sizeEntry.count,
+          unitPrice: variant.customerPrice ?? 0,
+          sourceInvoiceId: invoice.id,
+          sourceInvoiceVisualId: invoice.visualId,
+          sourceLineItemId: lineItem.id,
+          addedAt: new Date().toISOString(),
+        });
+        added += sizeEntry.count;
+      }
+      return added;
+    },
+    [addItem],
+  );
 
   async function fetchInvoices() {
     setLoading(true);
@@ -340,6 +540,25 @@ export default function OrdersPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
+      {/* Sticky cart strip — visible while scrolling long invoice lists (T021) */}
+      {cartTotals.itemCount > 0 && (
+        <div
+          className="sticky top-0 z-10 -mx-4 px-4 py-2 mb-4 flex items-center justify-between gap-3 backdrop-blur"
+          style={{ background: 'color-mix(in srgb, var(--surface) 92%, transparent)', borderBottom: '1px solid var(--border)' }}
+        >
+          <span className="text-sm">
+            🛒 <span className="font-bold">{cartTotals.itemCount}</span> item{cartTotals.itemCount === 1 ? '' : 's'} in cart
+          </span>
+          <Link
+            href="/orders/cart"
+            className="px-3 py-1 rounded-md text-xs font-semibold"
+            style={{ background: 'var(--accent)', color: '#fff' }}
+          >
+            View cart →
+          </Link>
+        </div>
+      )}
+
       {/* Page header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
@@ -417,7 +636,13 @@ export default function OrdersPage() {
       {!loading && !error && invoices.length > 0 && (
         <div className="flex flex-col gap-4">
           {invoices.map((invoice) => (
-            <InvoiceCard key={invoice.id} invoice={invoice} />
+            <InvoiceCard
+              key={invoice.id}
+              invoice={invoice}
+              classifications={classifications}
+              onAddToCart={handleAddToCart}
+              onRetry={retry}
+            />
           ))}
         </div>
       )}
