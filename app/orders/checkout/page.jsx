@@ -29,6 +29,13 @@ function buildStockLookupItems(cartItems) {
   return Array.from(seen.values());
 }
 
+/** Icon for payment profile type */
+function ProfileIcon({ type }) {
+  if (type === 'Card') return <span>💳</span>;
+  if (type === 'Bank') return <span>🏦</span>;
+  return <span>💰</span>;
+}
+
 export default function CheckoutPage() {
   const { cart, removeItem, setQty, clearCart } = useCart();
   const { itemCount, lineCount, grandTotal } = totals(cart);
@@ -38,6 +45,11 @@ export default function CheckoutPage() {
   const [stockMap, setStockMap] = useState(() => new Map());
   const [stockState, setStockState] = useState('idle'); // idle | loading | ready | error
   const [stockError, setStockError] = useState(null);
+
+  // Payment profiles
+  const [profiles, setProfiles] = useState([]);
+  const [profilesState, setProfilesState] = useState('idle'); // idle | loading | ready | error
+  const [selectedProfileId, setSelectedProfileId] = useState(null);
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +61,28 @@ export default function CheckoutPage() {
     () => lookupItems.map((i) => `${i.styleNumber}|${i.color}`).join('||'),
     [lookupItems],
   );
+
+  // Fetch payment profiles on mount
+  useEffect(() => {
+    if (confirmation) return;
+    setProfilesState('loading');
+    fetch('/api/payment-profiles')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.error || 'Failed to load payment profiles');
+        setProfiles(data.profiles || []);
+        // Default to the first profile returned by SS Activewear
+        if (data.profiles && data.profiles.length > 0) {
+          setSelectedProfileId(data.profiles[0].profileID);
+        }
+        setProfilesState('ready');
+      })
+      .catch((err) => {
+        console.error('[checkout] payment profiles error:', err.message);
+        setProfilesState('error');
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmation]);
 
   // Re-query SS Activewear on mount to refresh stock for cart items
   useEffect(() => {
@@ -93,6 +127,10 @@ export default function CheckoutPage() {
 
   async function handlePlaceOrder() {
     if (submitting || cart.items.length === 0) return;
+    if (!selectedProfileId) {
+      alert('Please select a payment method before placing your order.');
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
 
@@ -101,6 +139,7 @@ export default function CheckoutPage() {
       lines: cart.items.map((i) => ({ identifier: i.sku, qty: i.qty })),
       poNumber: uniqueInvoices.join(', '),
       comments: `Consolidated from invoices: ${uniqueInvoices.join(', ')}`,
+      paymentProfileId: selectedProfileId,
     };
 
     try {
@@ -287,6 +326,51 @@ export default function CheckoutPage() {
         ))}
       </div>
 
+      {/* Payment method selector */}
+      <div className="mt-6 rounded-xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--foreground)' }}>
+          Payment Method
+        </h3>
+        {profilesState === 'loading' && (
+          <div className="text-xs" style={{ color: 'var(--muted)' }}>⟳ Loading payment methods…</div>
+        )}
+        {profilesState === 'error' && (
+          <div className="text-xs text-red-600 dark:text-red-400">
+            ⚠ Could not load payment methods. Please refresh and try again.
+          </div>
+        )}
+        {profilesState === 'ready' && profiles.length === 0 && (
+          <div className="text-xs text-amber-600 dark:text-amber-400">
+            ⚠ No payment methods found on your S&amp;S Activewear account. Please add a credit card or bank account at ssactivewear.com.
+          </div>
+        )}
+        {profilesState === 'ready' && profiles.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {profiles.map((profile) => (
+              <label
+                key={profile.profileID}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors"
+                style={{
+                  borderColor: selectedProfileId === profile.profileID ? 'var(--accent)' : 'var(--border)',
+                  background: selectedProfileId === profile.profileID ? 'color-mix(in srgb, var(--accent) 8%, var(--surface))' : 'var(--surface)',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="paymentProfile"
+                  value={profile.profileID}
+                  checked={selectedProfileId === profile.profileID}
+                  onChange={() => setSelectedProfileId(profile.profileID)}
+                  className="accent-[var(--accent)]"
+                />
+                <ProfileIcon type={profile.profileType} />
+                <span className="text-sm" style={{ color: 'var(--foreground)' }}>{profile.name}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="mt-6 rounded-xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm" style={{ color: 'var(--muted)' }}>
@@ -310,7 +394,7 @@ export default function CheckoutPage() {
         <button
           type="button"
           onClick={handlePlaceOrder}
-          disabled={submitting}
+          disabled={submitting || !selectedProfileId || profilesState !== 'ready'}
           className="w-full px-6 py-4 rounded-lg font-bold text-base transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: 'var(--accent)', color: '#fff' }}
         >

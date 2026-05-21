@@ -47,7 +47,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
 
-    const { shippingAddress, lines, poNumber, comments } = body;
+    const { shippingAddress, lines, poNumber, comments, paymentProfileId } = body;
 
     // Basic validation — shippingAddress is optional; createSSOrder defaults to the shop address
     if (shippingAddress) {
@@ -84,9 +84,9 @@ export async function POST(request) {
       }
     }
 
-    console.log('[place-order] Submitting order (testOrder=true):', JSON.stringify({ shippingAddress, lines, poNumber, comments }, null, 2));
+    console.log('[place-order] Submitting order (testOrder=true):', JSON.stringify({ shippingAddress, lines, poNumber, comments, paymentProfileId }, null, 2));
 
-    const order = await createSSOrder({ shippingAddress, lines, poNumber, comments });
+    const order = await createSSOrder({ shippingAddress, lines, poNumber, comments, paymentProfileId });
 
     console.log('[place-order] SS API response:', JSON.stringify(order, null, 2));
 
