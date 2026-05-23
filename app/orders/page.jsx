@@ -369,6 +369,7 @@ function SizeEditor({ rowSizes, getQty, onChange, status, maxPairs = 4 }) {
                   borderColor: 'var(--border)',
                   color: 'var(--foreground)',
                   '--tw-ring-color': 'var(--accent)',
+                  fontSize: '16px',
                 }}
               />
             </Fragment>
