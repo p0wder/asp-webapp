@@ -349,7 +349,6 @@ function SizeEditor({ rowSizes, getQty, onChange, status, maxPairs = 4 }) {
       >
         {sizes.map((s) => {
           const val = getQty(s);
-          const isPrefilled = val === s.prefillQty && val !== 0;
           return (
             <Fragment key={s.sizeName}>
               <span
@@ -365,7 +364,7 @@ function SizeEditor({ rowSizes, getQty, onChange, status, maxPairs = 4 }) {
                 onChange={(e) => onChange(s.sizeName, e.target.value)}
                 className="w-12 text-center rounded border px-1 py-0.5 text-xs font-medium focus:outline-none focus:ring-2"
                 style={{
-                  background: isPrefilled ? 'var(--surface)' : 'var(--background)',
+                  background: 'var(--surface)',
                   borderColor: 'var(--border)',
                   color: 'var(--foreground)',
                   '--tw-ring-color': 'var(--accent)',
