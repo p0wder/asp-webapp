@@ -362,6 +362,7 @@ function SizeEditor({ rowSizes, getQty, onChange, status, maxPairs = 4 }) {
                 min="0"
                 value={val}
                 onChange={(e) => onChange(s.sizeName, e.target.value)}
+                inputMode="numeric"
                 className="w-12 text-center rounded border px-1 py-0.5 text-xs font-medium focus:outline-none focus:ring-2"
                 style={{
                   background: 'var(--surface)',
