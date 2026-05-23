@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useCart } from '@/context/CartContext';
 import { totals } from '@/lib/cart';
 
@@ -33,6 +33,74 @@ function sizeLabel(sizeEnum) {
     size_other: 'Other',
   };
   return map[sizeEnum] || sizeEnum;
+}
+
+/**
+ * Returns the sizes to render for a line item, plus the target qty the user
+ * must allocate across them.
+ *
+ * - When SS classification matches: SS variants are authoritative. The size
+ *   list comes from unique sizeName values across variants, sorted by sizeOrder.
+ *   Sizes whose label matches a Printavo bucket (S → S, M → M, …) are pre-filled
+ *   from the Printavo counts. The target = sum of all Printavo size counts so
+ *   the user re-allocates any qty Printavo bucketed as "Other".
+ *
+ * - When SS lookup is pending / Sanmar / failed: Printavo sizes are used as a
+ *   fallback (filtered to sizes with count > 0 plus "Other" if any).
+ *
+ * @returns { mode: 'ss'|'printavo', sizes: Array<{ sizeName, sizeOrder, prefillQty }>, targetQty: number }
+ */
+function getRowSizes(lineItem, classification) {
+  const printavoEntries = (lineItem.sizes || []).filter((s) => (s.count || 0) > 0);
+  const targetQty = printavoEntries.reduce((sum, s) => sum + (s.count || 0), 0);
+
+  const matched = classification?.state === 'matched' && classification.variants?.length > 0;
+
+  if (!matched) {
+    // Printavo fallback — show only sizes with qty, in canonical order
+    const sizes = printavoEntries
+      .map((s) => ({
+        sizeName: sizeLabel(s.size),
+        sizeOrder: SIZE_ORDER.indexOf(sizeLabel(s.size)),
+        prefillQty: s.count || 0,
+      }))
+      .sort((a, b) => {
+        // Move sizes not in SIZE_ORDER (incl. "Other") to the end
+        const ax = a.sizeOrder === -1 ? 999 : a.sizeOrder;
+        const bx = b.sizeOrder === -1 ? 999 : b.sizeOrder;
+        return ax - bx;
+      });
+    return { mode: 'printavo', sizes, targetQty };
+  }
+
+  // SS sizes — unique, sorted by sizeOrder
+  const bySize = new Map();
+  for (const v of classification.variants) {
+    if (!v.sizeName) continue;
+    if (!bySize.has(v.sizeName)) {
+      bySize.set(v.sizeName, { sizeName: v.sizeName, sizeOrder: v.sizeOrder || v.sizeName });
+    }
+  }
+
+  // Pre-fill from Printavo where labels match (case-insensitive)
+  const printavoByLabel = new Map(
+    printavoEntries.map((s) => [sizeLabel(s.size).toUpperCase(), s.count || 0]),
+  );
+
+  const sizes = [...bySize.values()]
+    .map((s) => ({
+      ...s,
+      prefillQty: printavoByLabel.get(s.sizeName.toUpperCase()) || 0,
+    }))
+    .sort((a, b) => String(a.sizeOrder).localeCompare(String(b.sizeOrder)));
+
+  // Single-size products (e.g. "Adjustable" caps, OSFA) have nowhere else for
+  // the Printavo qty to land — pre-fill that single size to the row's target.
+  if (sizes.length === 1 && targetQty > 0) {
+    sizes[0].prefillQty = targetQty;
+  }
+
+  return { mode: 'ss', sizes, targetQty };
 }
 
 /**
@@ -99,7 +167,7 @@ function useLineItemClassification(lineItems) {
   return { classifications, retry };
 }
 
-function SourcingCell({ lineItem, result, onAddToCart, onRetry }) {
+function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabledReason }) {
   const [justAdded, setJustAdded] = useState(0);
   const state = result?.state || 'pending';
 
@@ -122,15 +190,24 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry }) {
     return (
       <button
         type="button"
+        disabled={disabled}
         onClick={() => {
+          if (disabled) return;
           const n = onAddToCart(lineItem, result.variants);
           if (n > 0) {
             setJustAdded(n);
             setTimeout(() => setJustAdded(0), 2000);
           }
         }}
-        className="px-3 py-1 rounded-md text-xs font-semibold transition-opacity hover:opacity-90"
-        style={{ background: 'var(--accent)', color: '#fff' }}
+        className="px-3 py-1 rounded-md text-xs font-semibold transition-opacity"
+        style={{
+          background: disabled ? 'var(--surface)' : 'var(--accent)',
+          color: disabled ? 'var(--muted)' : '#fff',
+          border: disabled ? '1px solid var(--border)' : 'none',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.7 : 1,
+        }}
+        title={disabled ? (disabledReason || 'Not ready') : undefined}
       >
         + Add to Cart
       </button>
@@ -177,9 +254,81 @@ function PaidBadge({ paidInFull }) {
   );
 }
 
+/**
+ * Per-row size editor — a CSS grid of (label, input) pairs that align across
+ * wrapped rows, plus a status line with running total and a small hint text
+ * explaining the "entered / invoice qty" format. Sizes come from getRowSizes()
+ * so each row shows only the sizes that apply to its product.
+ */
+function SizeEditor({ rowSizes, getQty, onChange, status }) {
+  const { sizes, targetQty } = rowSizes;
+  const sum = sizes.reduce((acc, s) => acc + getQty(s), 0);
+
+  const statusText =
+    status === 'ok' ? `✓ ${sum} / ${targetQty}`
+    : status === 'over' ? `⚠ ${sum} / ${targetQty} — ${sum - targetQty} over`
+    : status === 'under' ? `· ${sum} / ${targetQty} — ${targetQty - sum} to go`
+    : `· ${sum} / ${targetQty}`;
+  const statusColor =
+    status === 'ok' ? '#16a34a'
+    : status === 'over' ? '#dc2626'
+    : status === 'under' ? '#ca8a04'
+    : 'var(--muted)';
+
+  // Lay out as N (label, input) pairs per visual row — N = min(sizes, 4).
+  // The grid keeps labels & inputs vertically aligned across wrapped rows.
+  const pairsPerRow = Math.min(sizes.length, 4);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div
+        className="grid items-center gap-x-2 gap-y-1.5 text-xs"
+        style={{ gridTemplateColumns: `repeat(${pairsPerRow}, max-content 48px)` }}
+      >
+        {sizes.map((s) => {
+          const val = getQty(s);
+          const isPrefilled = val === s.prefillQty && val !== 0;
+          return (
+            <Fragment key={s.sizeName}>
+              <span
+                className="font-medium text-right whitespace-nowrap"
+                style={{ color: 'var(--muted)' }}
+              >
+                {s.sizeName}
+              </span>
+              <input
+                type="number"
+                min="0"
+                value={val}
+                onChange={(e) => onChange(s.sizeName, e.target.value)}
+                className="w-12 text-center rounded border px-1 py-0.5 text-xs font-medium focus:outline-none focus:ring-2"
+                style={{
+                  background: isPrefilled ? 'var(--surface)' : 'var(--background)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--foreground)',
+                  '--tw-ring-color': 'var(--accent)',
+                }}
+              />
+            </Fragment>
+          );
+        })}
+      </div>
+      <div
+        className="text-xs font-semibold w-fit cursor-help"
+        style={{ color: statusColor }}
+        title="entered / invoice qty"
+      >
+        {statusText}
+      </div>
+    </div>
+  );
+}
+
 function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }) {
-  // Local state: overrides for size quantities keyed by `${lineItemId}:${sizeLabel}`
-  const [qtyOverrides, setQtyOverrides] = useState({});
+  // Per-row, per-size user-entered quantities. Shape: { [lineItemId]: { [sizeName]: qty } }
+  // Sparse: a missing entry falls back to the prefill from getRowSizes(), so the user
+  // sees Printavo's numbers by default and only overrides change state.
+  const [rowQuantities, setRowQuantities] = useState({});
 
   if (!lineItemGroups?.nodes?.length) {
     return (
@@ -202,31 +351,28 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
     );
   }
 
-  // Collect all sizes that appear across all line items (for column headers)
-  const usedSizes = new Set();
-  allLineItems.forEach((li) => {
-    (li.sizes || []).forEach((s) => {
-      if (s.count > 0) usedSizes.add(sizeLabel(s.size));
-    });
-  });
-  const sizeColumns = SIZE_ORDER.filter((s) => usedSizes.has(s));
-  // Add "Other" at the end if present
-  if (usedSizes.has('Other')) sizeColumns.push('Other');
-
-  function handleQtyChange(lineItemId, size, value) {
+  function handleSizeChange(lineItemId, sizeName, value) {
     const parsed = parseInt(value, 10);
     const next = isNaN(parsed) || parsed < 0 ? 0 : parsed;
-    setQtyOverrides((prev) => ({ ...prev, [`${lineItemId}:${size}`]: next }));
+    setRowQuantities((prev) => ({
+      ...prev,
+      [lineItemId]: { ...(prev[lineItemId] || {}), [sizeName]: next },
+    }));
   }
 
-  // Build an effective line item with overridden sizes for use by onAddToCart
-  function effectiveLineItem(li) {
-    const sizes = (li.sizes || []).map((s) => {
-      const lbl = sizeLabel(s.size);
-      const key = `${li.id}:${lbl}`;
-      return key in qtyOverrides ? { ...s, count: qtyOverrides[key] } : s;
-    });
-    return { ...li, sizes };
+  function getQtyForSize(lineItemId, size) {
+    const override = rowQuantities[lineItemId]?.[size.sizeName];
+    return override !== undefined ? override : size.prefillQty;
+  }
+
+  // Build a snapshot of per-size quantities for handleAddToCart. The cart layer
+  // needs the resolved sizes (post-override) keyed by SS sizeName.
+  function effectiveLineItem(li, rowSizes) {
+    const sizeAllocations = rowSizes.sizes.reduce((acc, s) => {
+      acc[s.sizeName] = getQtyForSize(li.id, s);
+      return acc;
+    }, {});
+    return { ...li, sizeAllocations };
   }
 
   return (
@@ -243,15 +389,9 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
             <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
               Description
             </th>
-            {sizeColumns.map((s) => (
-              <th
-                key={s}
-                className="text-center py-2 px-2 font-semibold text-xs uppercase tracking-wide"
-                style={{ color: 'var(--muted)' }}
-              >
-                {s}
-              </th>
-            ))}
+            <th className="text-left py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Sizes
+            </th>
             <th className="text-center py-2 px-2 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
               Qty
             </th>
@@ -268,18 +408,28 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
         </thead>
         <tbody>
           {allLineItems.map((li) => {
-            // Build a size → count map for this line item (respecting overrides)
-            const sizeMap = {};
-            (li.sizes || []).forEach((s) => {
-              const lbl = sizeLabel(s.size);
-              const key = `${li.id}:${lbl}`;
-              sizeMap[lbl] = key in qtyOverrides ? qtyOverrides[key] : s.count;
-            });
+            const classification = classifications?.get(li.id);
+            const rowSizes = getRowSizes(li, classification);
 
-            // Effective qty = sum of all (possibly overridden) size counts
-            const qty = sizeColumns.reduce((sum, s) => sum + (sizeMap[s] || 0), 0) ||
-              (li.items ?? (li.sizes || []).reduce((sum, s) => sum + (s.count || 0), 0));
+            const qty = rowSizes.sizes.reduce(
+              (sum, s) => sum + getQtyForSize(li.id, s),
+              0,
+            );
             const lineTotal = li.price != null && qty ? li.price * qty : null;
+
+            const status =
+              qty === 0 ? 'idle'
+              : qty < rowSizes.targetQty ? 'under'
+              : qty === rowSizes.targetQty ? 'ok'
+              : 'over';
+
+            // Only block add-to-cart when nothing's been allocated yet. Going under
+            // or over the invoice qty is allowed — the status indicator surfaces the
+            // mismatch but doesn't enforce it (users routinely buy extras as overrun).
+            const addDisabled = rowSizes.mode === 'ss' && qty === 0;
+            const addDisabledReason = addDisabled
+              ? `Allocate at least 1 across the available sizes`
+              : null;
 
             return (
               <tr
@@ -287,57 +437,40 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                 style={{ borderBottom: '1px solid var(--border)' }}
                 className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
               >
-                <td className="py-2 pr-3 font-mono text-xs font-medium">
+                <td className="py-2 pr-3 font-mono text-xs font-medium align-top">
                   {li.itemNumber || '—'}
                 </td>
-                <td className="py-2 pr-3 text-xs">
+                <td className="py-2 pr-3 text-xs align-top">
                   {li.color || '—'}
                 </td>
-                <td className="py-2 pr-3 text-xs max-w-[200px]">
+                <td className="py-2 pr-3 text-xs max-w-[200px] align-top">
                   {li.description || '—'}
                 </td>
-                {sizeColumns.map((s) => {
-                  const originalCount = (li.sizes || []).find(
-                    (sz) => sizeLabel(sz.size) === s
-                  )?.count ?? 0;
-                  const key = `${li.id}:${s}`;
-                  const currentVal = key in qtyOverrides ? qtyOverrides[key] : originalCount;
-                  const isModified = key in qtyOverrides && qtyOverrides[key] !== originalCount;
-
-                  return (
-                    <td key={s} className="py-2 px-1 text-center text-xs">
-                      <input
-                        type="number"
-                        min="0"
-                        value={currentVal}
-                        onChange={(e) => handleQtyChange(li.id, s, e.target.value)}
-                        className="w-14 text-center rounded border px-1 py-0.5 text-xs font-medium focus:outline-none focus:ring-2"
-                        style={{
-                          background: isModified ? 'color-mix(in srgb, var(--accent) 12%, var(--surface))' : 'var(--surface)',
-                          borderColor: isModified ? 'var(--accent)' : 'var(--border)',
-                          color: 'var(--foreground)',
-                          '--tw-ring-color': 'var(--accent)',
-                        }}
-                        title={isModified ? `Original: ${originalCount}` : undefined}
-                      />
-                    </td>
-                  );
-                })}
-                <td className="py-2 px-2 text-center text-xs font-semibold">
+                <td className="py-2 px-3 align-top">
+                  <SizeEditor
+                    rowSizes={rowSizes}
+                    getQty={(s) => getQtyForSize(li.id, s)}
+                    onChange={(sizeName, v) => handleSizeChange(li.id, sizeName, v)}
+                    status={status}
+                  />
+                </td>
+                <td className="py-2 px-2 text-center text-xs font-semibold align-top">
                   {qty || '—'}
                 </td>
-                <td className="py-2 pl-3 text-right text-xs">
+                <td className="py-2 pl-3 text-right text-xs align-top">
                   {li.price != null ? formatCurrency(li.price) : '—'}
                 </td>
-                <td className="py-2 pl-3 text-right text-xs font-semibold">
+                <td className="py-2 pl-3 text-right text-xs font-semibold align-top">
                   {lineTotal != null ? formatCurrency(lineTotal) : '—'}
                 </td>
-                <td className="py-2 pl-3 text-right text-xs">
+                <td className="py-2 pl-3 text-right text-xs align-top">
                   <SourcingCell
-                    lineItem={effectiveLineItem(li)}
-                    result={classifications?.get(li.id)}
+                    lineItem={effectiveLineItem(li, rowSizes)}
+                    result={classification}
                     onAddToCart={onAddToCart}
                     onRetry={onRetry}
+                    disabled={addDisabled}
+                    disabledReason={addDisabledReason}
                   />
                 </td>
               </tr>
@@ -519,20 +652,26 @@ export default function OrdersPage() {
   const { cart, addItem } = useCart();
   const cartTotals = totals(cart);
 
-  // Expand a Printavo line item into one CartItem per (size, color) variant
+  // Expand a Printavo line item into one CartItem per (size, color) variant.
+  // The OrderOverview component computes per-SS-size quantities (allowing for
+  // hat sizes like S/M, L/XL, etc.) and attaches them as lineItem.sizeAllocations.
   const handleAddToCart = useCallback(
     (invoice, lineItem, variants) => {
       let added = 0;
-      for (const sizeEntry of lineItem.sizes || []) {
-        if (!(sizeEntry.count > 0)) continue;
-        const sizeLbl = sizeLabel(sizeEntry.size);
-        const variant = variants.find(
+      const allocations = lineItem.sizeAllocations || {};
+
+      const findVariant = (sizeName) =>
+        variants.find(
           (v) =>
-            (v.sizeName || '').trim().toUpperCase() === sizeLbl.toUpperCase() &&
+            (v.sizeName || '').trim().toUpperCase() === sizeName.toUpperCase() &&
             (v.colorName || '').trim().toLowerCase() === (lineItem.color || '').trim().toLowerCase(),
         );
+
+      for (const [sizeName, qty] of Object.entries(allocations)) {
+        if (!(qty > 0)) continue;
+        const variant = findVariant(sizeName);
         if (!variant) {
-          console.warn('[orders] no SS variant for', lineItem.itemNumber, sizeLbl, lineItem.color);
+          console.warn('[orders] no SS variant for', lineItem.itemNumber, sizeName, lineItem.color);
           continue;
         }
         addItem({
@@ -542,14 +681,14 @@ export default function OrdersPage() {
           brandName: variant.brandName,
           color: variant.colorName || lineItem.color,
           size: variant.sizeName,
-          qty: sizeEntry.count,
+          qty,
           unitPrice: variant.customerPrice ?? 0,
           sourceInvoiceId: invoice.id,
           sourceInvoiceVisualId: invoice.visualId,
           sourceLineItemId: lineItem.id,
           addedAt: new Date().toISOString(),
         });
-        added += sizeEntry.count;
+        added += qty;
       }
       return added;
     },
