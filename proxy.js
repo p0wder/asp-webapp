@@ -34,5 +34,7 @@ export const config = {
     '/orders/:path*',
     '/api/ready-to-order/:path*',
     '/api/place-order/:path*',
+    '/api/printavo-status-update/:path*',
+    '/api/orders-partial-state/:path*',
   ],
 };

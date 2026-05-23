@@ -136,7 +136,13 @@ export default function CheckoutPage() {
 
     const uniqueInvoices = Array.from(new Set(cart.items.map((i) => `#${i.sourceInvoiceVisualId}`)));
     const payload = {
-      lines: cart.items.map((i) => ({ identifier: i.sku, qty: i.qty })),
+      lines: cart.items.map((i) => ({
+        identifier: i.sku,
+        qty: i.qty,
+        sourceInvoiceId: i.sourceInvoiceId,
+        sourceInvoiceVisualId: i.sourceInvoiceVisualId,
+        sourceLineItemId: i.sourceLineItemId,
+      })),
       poNumber: uniqueInvoices.join(', '),
       comments: `Consolidated from invoices: ${uniqueInvoices.join(', ')}`,
       paymentProfileId: selectedProfileId,
@@ -292,7 +298,7 @@ export default function CheckoutPage() {
                               : `⚠ Only ${shortage.available} available (requested ${item.qty})`}
                             <button
                               type="button"
-                              onClick={() => setQty(item.sku, shortage.available)}
+                              onClick={() => setQty(item.sku, item.sourceInvoiceId, shortage.available)}
                               disabled={shortage.severity === 'out-of-stock'}
                               className="px-2 py-0.5 rounded bg-amber-600 text-white text-[10px] font-semibold disabled:opacity-50"
                             >
@@ -300,7 +306,7 @@ export default function CheckoutPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => removeItem(item.sku)}
+                              onClick={() => removeItem(item.sku, item.sourceInvoiceId)}
                               className="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] font-semibold"
                             >
                               Remove

@@ -76,7 +76,7 @@ export default function CartPage() {
               </div>
               <button
                 type="button"
-                onClick={() => removeItem(item.sku)}
+                onClick={() => removeItem(item.sku, item.sourceInvoiceId)}
                 aria-label={`Remove ${item.sku}`}
                 className="text-sm hover:text-red-600 transition-colors flex-shrink-0"
                 style={{ color: 'var(--muted)' }}
@@ -95,7 +95,7 @@ export default function CartPage() {
                   type="number"
                   min="1"
                   value={item.qty}
-                  onChange={(e) => setQty(item.sku, parseInt(e.target.value, 10) || 0)}
+                  onChange={(e) => setQty(item.sku, item.sourceInvoiceId, parseInt(e.target.value, 10) || 0)}
                   className="w-16 px-2 py-1 rounded border text-center text-sm"
                   style={{ background: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
                 />

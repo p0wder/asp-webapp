@@ -38,11 +38,11 @@ export function CartProvider({ children }) {
     [mutate],
   );
   const removeItem = useCallback(
-    (sku) => mutate(cartLib.removeItem(cartStorage.readCart(), sku)),
+    (sku, sourceInvoiceId) => mutate(cartLib.removeItem(cartStorage.readCart(), sku, sourceInvoiceId)),
     [mutate],
   );
   const setQty = useCallback(
-    (sku, qty) => mutate(cartLib.setQty(cartStorage.readCart(), sku, qty)),
+    (sku, sourceInvoiceId, qty) => mutate(cartLib.setQty(cartStorage.readCart(), sku, sourceInvoiceId, qty)),
     [mutate],
   );
   const clearCart = useCallback(() => mutate(cartLib.clearCart(cartStorage.readCart())), [mutate]);
