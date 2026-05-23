@@ -324,7 +324,7 @@ function PaidBadge({ paidInFull }) {
  * explaining the "entered / invoice qty" format. Sizes come from getRowSizes()
  * so each row shows only the sizes that apply to its product.
  */
-function SizeEditor({ rowSizes, getQty, onChange, status }) {
+function SizeEditor({ rowSizes, getQty, onChange, status, maxPairs = 4 }) {
   const { sizes, targetQty } = rowSizes;
   const sum = sizes.reduce((acc, s) => acc + getQty(s), 0);
 
@@ -339,9 +339,7 @@ function SizeEditor({ rowSizes, getQty, onChange, status }) {
     : status === 'under' ? '#ca8a04'
     : 'var(--muted)';
 
-  // Lay out as N (label, input) pairs per visual row — N = min(sizes, 4).
-  // The grid keeps labels & inputs vertically aligned across wrapped rows.
-  const pairsPerRow = Math.min(sizes.length, 4);
+  const pairsPerRow = Math.min(sizes.length, maxPairs);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -490,6 +488,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                 getQty={(s) => getQtyForSize(li.id, s)}
                 onChange={(sizeName, v) => handleSizeChange(li.id, sizeName, v)}
                 status={status}
+                maxPairs={2}
               />
               <div className="flex gap-4 text-xs">
                 <span>Qty: <span className="font-semibold">{qty || '—'}</span></span>
