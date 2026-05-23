@@ -36,6 +36,89 @@ function ProfileIcon({ type }) {
   return <span>💰</span>;
 }
 
+/**
+ * Per-invoice partial-items breakdown on the confirmation screen (US2).
+ * Shows which line items were ordered vs. still need follow-up for each
+ * partial source invoice.
+ */
+function PartialItemsTable({ visualId, summary }) {
+  return (
+    <div
+      className="rounded-lg border overflow-hidden"
+      style={{ background: 'var(--background)', borderColor: 'var(--border)' }}
+    >
+      <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+        <span className="font-mono text-sm">#{visualId}</span>
+        <span className="text-xs" style={{ color: 'var(--muted)' }}>
+          {summary.totalItemsStillNeeded} item{summary.totalItemsStillNeeded === 1 ? '' : 's'} still need ordering
+        </span>
+      </div>
+      <table className="w-full text-xs">
+        <thead style={{ color: 'var(--muted)' }}>
+          <tr className="text-left">
+            <th className="px-3 py-2 font-medium">Line item</th>
+            <th className="px-3 py-2 font-medium">Source</th>
+            <th className="px-3 py-2 font-medium text-right">Ordered</th>
+            <th className="px-3 py-2 font-medium text-right">Still needed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {summary.lineItems.map((li) => (
+            <tr key={li.sourceLineItemId} style={{ borderTop: '1px solid var(--border)' }}>
+              <td className="px-3 py-2">{li.description}</td>
+              <td className="px-3 py-2">
+                {li.source === 'ss-activewear'
+                  ? 'SS Activewear'
+                  : li.source === 'sanmar'
+                    ? 'Sanmar — Auto Order'
+                    : 'Lookup pending'}
+              </td>
+              <td className="px-3 py-2 text-right font-mono">{li.alreadyOrdered ?? 0}</td>
+              <td className="px-3 py-2 text-right font-mono font-semibold">{li.stillNeeded}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Renders the per-invoice Printavo status outcome chip on the confirmation
+ * screen. The retry control for failed updates is wired in T017 (US4).
+ */
+function StatusChip({ entry }) {
+  const update = entry.statusUpdate || {};
+  let label;
+  let tone; // 'success' | 'warn' | 'error' | 'muted'
+  if (update.outcome === 'updated') {
+    label = 'Status updated to Goods In Transit';
+    tone = 'success';
+  } else if (update.outcome === 'failed') {
+    label = `Status update failed — ${update.errorMessage || 'unknown error'}`;
+    tone = 'error';
+  } else if (update.outcome === 'skipped' && update.reason === 'partial') {
+    label = 'Partial — Printavo status unchanged';
+    tone = 'warn';
+  } else if (update.outcome === 'skipped' && update.reason === 'skipped-not-ready') {
+    label = 'Skipped — already past Ready to Order';
+    tone = 'muted';
+  } else if (update.outcome === 'skipped') {
+    label = 'Skipped';
+    tone = 'muted';
+  } else {
+    label = 'Unknown';
+    tone = 'muted';
+  }
+  const toneClass = {
+    success: 'bg-green-600 text-white',
+    warn: 'bg-amber-500 text-white',
+    error: 'bg-red-600 text-white',
+    muted: 'bg-neutral-400 text-white',
+  }[tone];
+  return <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${toneClass}`}>{label}</span>;
+}
+
 export default function CheckoutPage() {
   const { cart, removeItem, setQty, clearCart } = useCart();
   const { itemCount, lineCount, grandTotal } = totals(cart);
@@ -155,8 +238,8 @@ export default function CheckoutPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Order submission failed');
-      setConfirmation(data.order);
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Order submission failed');
+      setConfirmation(data);
       clearCart();
     } catch (err) {
       setSubmitError(err.message);
@@ -165,8 +248,11 @@ export default function CheckoutPage() {
     }
   }
 
-  // Confirmation panel (US4)
+  // Confirmation panel (US1 + US2)
   if (confirmation) {
+    const ssOrder = confirmation.ssOrder || {};
+    const perInvoice = confirmation.perInvoice || [];
+    const attribution = confirmation.attributionRecord || {};
     return (
       <div className="max-w-4xl mx-auto px-4 py-16">
         <div className="rounded-xl border p-8" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
@@ -177,31 +263,76 @@ export default function CheckoutPage() {
           <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>
             Your consolidated order has been placed. Confirmation email sent to aspmerch@gmail.com and gramigscott@gmail.com.
           </p>
-          {(confirmation.orderNum || confirmation.poNumber || confirmation.invoiceNumber) && (
+          {(ssOrder.orderNum || ssOrder.poNumber || ssOrder.invoiceNumber) && (
             <dl className="grid grid-cols-2 gap-3 text-sm mb-6">
-              {confirmation.orderNum != null && (
+              {ssOrder.orderNum != null && (
                 <>
                   <dt style={{ color: 'var(--muted)' }}>Order #</dt>
-                  <dd className="font-mono">{confirmation.orderNum}</dd>
+                  <dd className="font-mono">{ssOrder.orderNum}</dd>
                 </>
               )}
-              {confirmation.poNumber && (
+              {ssOrder.poNumber && (
                 <>
                   <dt style={{ color: 'var(--muted)' }}>PO #</dt>
-                  <dd className="font-mono">{confirmation.poNumber}</dd>
+                  <dd className="font-mono">{ssOrder.poNumber}</dd>
                 </>
               )}
-              {confirmation.invoiceNumber && (
+              {ssOrder.invoiceNumber && (
                 <>
                   <dt style={{ color: 'var(--muted)' }}>Invoice #</dt>
-                  <dd className="font-mono">{confirmation.invoiceNumber}</dd>
+                  <dd className="font-mono">{ssOrder.invoiceNumber}</dd>
                 </>
               )}
             </dl>
           )}
+
+          {perInvoice.length > 0 && (
+            <section className="mb-6">
+              <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--muted)' }}>
+                Printavo status per invoice
+              </h2>
+              <ul className="space-y-2">
+                {perInvoice.map((entry) => (
+                  <li
+                    key={entry.sourceInvoiceId}
+                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-sm"
+                    style={{ background: 'var(--background)', borderColor: 'var(--border)' }}
+                  >
+                    <span className="font-mono">#{entry.sourceInvoiceVisualId}</span>
+                    <StatusChip entry={entry} />
+                  </li>
+                ))}
+              </ul>
+              {attribution.writeOk === false && (
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠ Attribution record write failed: {attribution.writeError}. Future partial-state derivation for these invoices may show "unavailable" until this is corrected.
+                </p>
+              )}
+            </section>
+          )}
+
+          {perInvoice.some((p) => p.classification === 'partial' && p.partialItemsSummary) && (
+            <section className="mb-6">
+              <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--muted)' }}>
+                Partial — needs follow-up
+              </h2>
+              <div className="space-y-4">
+                {perInvoice
+                  .filter((p) => p.classification === 'partial' && p.partialItemsSummary)
+                  .map((entry) => (
+                    <PartialItemsTable
+                      key={entry.sourceInvoiceId}
+                      visualId={entry.sourceInvoiceVisualId}
+                      summary={entry.partialItemsSummary}
+                    />
+                  ))}
+              </div>
+            </section>
+          )}
+
           <details className="mb-6">
             <summary className="cursor-pointer text-xs" style={{ color: 'var(--muted)' }}>
-              Full SS Activewear response
+              Full /api/place-order response
             </summary>
             <pre className="mt-3 text-xs p-3 rounded overflow-x-auto" style={{ background: 'var(--background)', border: '1px solid var(--border)' }}>
               {JSON.stringify(confirmation, null, 2)}
