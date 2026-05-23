@@ -1,101 +1,111 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { createSSOrder } from '@/lib/ssActivewear';
+import { placeOrderChain } from '@/lib/placeOrderChain';
 
 /**
  * POST /api/place-order
  *
- * Places an order with S&S Activewear. testOrder is ALWAYS true (hardcoded
- * in createSSOrder) to prevent accidental real orders. Email confirmations
- * are sent to aspmerch@gmail.com and gramigscott@gmail.com.
+ * Submits an SS Activewear order via `lib/ssActivewear.createSSOrder`, then
+ * chains: per-invoice classification → Printavo status updates for fully-
+ * ordered invoices → Order Attribution Record persistence. Returns an
+ * aggregated per-invoice result.
  *
- * Request body:
+ * Heavy lifting lives in `lib/placeOrderChain.js` per Constitution Principle
+ * III (thin route adapters). This handler only does auth + validation +
+ * delegation + response shaping.
+ *
+ * Request body (extends the spec-001 shape with attribution fields):
  * {
- *   shippingAddress: {
- *     name: string,       // e.g. "ASP Merch"
- *     address: string,    // street address
- *     city: string,
- *     state: string,      // 2-letter abbreviation, e.g. "IL"
- *     zip: string,
- *     country: string     // e.g. "US"
- *   },
- *   lines: [
- *     {
- *       identifier: string,      // S&S SKU, e.g. "B00060043"
- *       qty: number,
- *       warehouseAbbr?: string   // optional warehouse code, e.g. "IL", "KS", "GA"
- *     }
- *   ],
- *   poNumber?: string,    // optional PO / reference number
- *   comments?: string     // optional order comments
+ *   shippingAddress?: {...},
+ *   lines: [{ identifier, qty, sourceInvoiceId, sourceInvoiceVisualId, sourceLineItemId, warehouseAbbr? }],
+ *   poNumber?: string,
+ *   comments?: string,
+ *   paymentProfileId?: string
  * }
  *
- * Response (success):
- * { success: true, order: <SS API response> }
- *
- * Response (error):
- * { error: string }
+ * Response shape: see `.specify/specs/002-printavo-order-notification/contracts/place-order.md`.
  */
 export async function POST(request) {
-  // ── Auth guard: admin session required ──────────────────────────────────
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  let body;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
+  }
 
-    const { shippingAddress, lines, poNumber, comments, paymentProfileId } = body;
+  const { shippingAddress, lines, poNumber, comments, paymentProfileId } = body || {};
 
-    // Basic validation — shippingAddress is optional; createSSOrder defaults to the shop address
-    if (shippingAddress) {
-      const requiredAddressFields = ['name', 'address', 'city', 'state', 'zip', 'country'];
-      const missingFields = requiredAddressFields.filter((f) => !shippingAddress[f]);
-      if (missingFields.length > 0) {
-        return NextResponse.json(
-          { error: `shippingAddress is missing required fields: ${missingFields.join(', ')}` },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (!lines || !Array.isArray(lines) || lines.length === 0) {
+  if (shippingAddress) {
+    const required = ['name', 'address', 'city', 'state', 'zip', 'country'];
+    const missing = required.filter((f) => !shippingAddress[f]);
+    if (missing.length > 0) {
       return NextResponse.json(
-        { error: 'lines must be a non-empty array of { identifier, qty } objects.' },
-        { status: 400 }
+        { error: `shippingAddress is missing required fields: ${missing.join(', ')}` },
+        { status: 400 },
       );
     }
+  }
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.identifier) {
-        return NextResponse.json(
-          { error: `lines[${i}].identifier is required (e.g. "G500-S-WHITE").` },
-          { status: 400 }
-        );
-      }
-      if (!line.qty || line.qty < 1) {
-        return NextResponse.json(
-          { error: `lines[${i}].qty must be a positive number.` },
-          { status: 400 }
-        );
-      }
-    }
-
-    console.log('[place-order] Submitting order (testOrder=true):', JSON.stringify({ shippingAddress, lines, poNumber, comments, paymentProfileId }, null, 2));
-
-    const order = await createSSOrder({ shippingAddress, lines, poNumber, comments, paymentProfileId });
-
-    console.log('[place-order] SS API response:', JSON.stringify(order, null, 2));
-
-    return NextResponse.json({ success: true, order });
-  } catch (error) {
-    console.error('[place-order] Error:', error.message);
+  if (!Array.isArray(lines) || lines.length === 0) {
     return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
+      { error: 'lines must be a non-empty array of { identifier, qty, sourceInvoiceId, sourceInvoiceVisualId, sourceLineItemId } objects.' },
+      { status: 400 },
     );
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const errors = [];
+    if (!l.identifier) errors.push('identifier');
+    if (!l.qty || l.qty < 1) errors.push('qty (≥ 1)');
+    if (!l.sourceInvoiceId) errors.push('sourceInvoiceId');
+    if (!l.sourceInvoiceVisualId) errors.push('sourceInvoiceVisualId');
+    if (!l.sourceLineItemId) errors.push('sourceLineItemId');
+    if (errors.length) {
+      return NextResponse.json(
+        { error: `lines[${i}] missing or invalid: ${errors.join(', ')}` },
+        { status: 400 },
+      );
+    }
+  }
+
+  console.log(
+    '[place-order] Submitting order (testOrder=true):',
+    JSON.stringify({ poNumber, lineCount: lines.length, paymentProfileId }, null, 2),
+  );
+
+  try {
+    const result = await placeOrderChain({
+      shippingAddress,
+      lines,
+      poNumber,
+      comments,
+      paymentProfileId,
+      submittedBy: session.user?.email || session.user?.name || 'unknown',
+    });
+    console.log(
+      '[place-order] chain complete:',
+      JSON.stringify({
+        ssOrderRef: result.attributionRecord.ssOrderRef,
+        attribWriteOk: result.attributionRecord.writeOk,
+        perInvoice: result.perInvoice.map((p) => ({
+          visualId: p.sourceInvoiceVisualId,
+          classification: p.classification,
+          statusOutcome: p.statusUpdate?.outcome,
+        })),
+      }),
+    );
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err) {
+    // SS Activewear submission itself failed — no Printavo updates or
+    // attribution writes were attempted (per FR-007).
+    console.error('[place-order] Error:', err?.message || err);
+    return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
   }
 }

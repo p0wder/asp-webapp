@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { gql } from '@/lib/printavo';
-
-// Printavo status ID for "Ready to Order"
-const READY_TO_ORDER_STATUS_ID = '256605';
+import { gql, READY_TO_ORDER_STATUS_ID } from '@/lib/printavo';
 
 /**
  * GET /api/ready-to-order
