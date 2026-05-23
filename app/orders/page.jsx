@@ -488,7 +488,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                 getQty={(s) => getQtyForSize(li.id, s)}
                 onChange={(sizeName, v) => handleSizeChange(li.id, sizeName, v)}
                 status={status}
-                maxPairs={2}
+                maxPairs={3}
               />
               <div className="flex gap-4 text-xs">
                 <span>Qty: <span className="font-semibold">{qty || '—'}</span></span>
