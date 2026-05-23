@@ -12,10 +12,12 @@ export function ThemeProvider({ children }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Read saved theme from localStorage, fallback to system preference
     const saved = localStorage.getItem('theme');
     if (saved === 'dark' || saved === 'light') {
       setTheme(saved);
+    } else {
+      // No saved preference — explicitly lock to light and persist it
+      localStorage.setItem('theme', 'light');
     }
     setMounted(true);
   }, []);

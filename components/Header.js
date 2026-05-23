@@ -120,6 +120,10 @@ export default function Header() {
           >
             Get a Quote
           </Link>
+          <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+            <span className="font-medium" style={{ color: 'var(--foreground)' }}>Theme</span>
+            <ThemeToggle />
+          </div>
         </nav>
       )}
     </header>
