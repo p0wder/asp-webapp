@@ -85,15 +85,21 @@ function PartialItemsTable({ visualId, summary }) {
 
 /**
  * Renders the per-invoice Printavo status outcome chip on the confirmation
- * screen. The retry control for failed updates is wired in T017 (US4).
+ * screen. For failed updates, a Retry button is rendered alongside the chip
+ * (US4 / FR-010) that posts to /api/printavo-status-update.
  */
-function StatusChip({ entry }) {
+function StatusChip({ entry, onRetry, retrying }) {
   const update = entry.statusUpdate || {};
   let label;
   let tone; // 'success' | 'warn' | 'error' | 'muted'
   if (update.outcome === 'updated') {
-    label = 'Status updated to Goods In Transit';
-    tone = 'success';
+    if (update.reason === 'already-in-or-past-target') {
+      label = 'Status already updated';
+      tone = 'muted';
+    } else {
+      label = 'Status updated to Goods In Transit';
+      tone = 'success';
+    }
   } else if (update.outcome === 'failed') {
     label = `Status update failed — ${update.errorMessage || 'unknown error'}`;
     tone = 'error';
@@ -102,6 +108,9 @@ function StatusChip({ entry }) {
     tone = 'warn';
   } else if (update.outcome === 'skipped' && update.reason === 'skipped-not-ready') {
     label = 'Skipped — already past Ready to Order';
+    tone = 'muted';
+  } else if (update.outcome === 'skipped' && update.reason === 'already-in-or-past-target') {
+    label = 'Status already updated';
     tone = 'muted';
   } else if (update.outcome === 'skipped') {
     label = 'Skipped';
@@ -116,7 +125,22 @@ function StatusChip({ entry }) {
     error: 'bg-red-600 text-white',
     muted: 'bg-neutral-400 text-white',
   }[tone];
-  return <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${toneClass}`}>{label}</span>;
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${toneClass}`}>{label}</span>
+      {update.outcome === 'failed' && onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="px-2.5 py-1 rounded-md text-xs font-semibold border transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
+        >
+          {retrying ? 'Retrying…' : 'Retry'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function CheckoutPage() {
@@ -138,6 +162,105 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
+
+  // Per-invoice retry state for failed Printavo status updates (US4).
+  // Keyed by sourceInvoiceId — value is `true` while the retry POST is
+  // in-flight. We do not persist any other UI state here; the chip label
+  // is derived from the (updated) statusUpdate on the confirmation entry.
+  const [retryingByInvoiceId, setRetryingByInvoiceId] = useState({});
+
+  async function handleRetryStatusUpdate(entry) {
+    const invoiceId = entry.sourceInvoiceId;
+    if (!invoiceId || retryingByInvoiceId[invoiceId]) return;
+    setRetryingByInvoiceId((prev) => ({ ...prev, [invoiceId]: true }));
+    try {
+      const res = await fetch('/api/printavo-status-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId,
+          // Goods-In-Transit status ID — mirror of GOODS_IN_TRANSIT_STATUS_ID
+          // in `lib/printavo.js`. Hardcoded here to avoid importing a
+          // server-only module into this client component.
+          targetStatusId: '292756',
+        }),
+      });
+      const data = await res.json();
+
+      setConfirmation((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          perInvoice: prev.perInvoice.map((p) => {
+            if (p.sourceInvoiceId !== invoiceId) return p;
+            if (res.ok && data.ok && data.skipped === false) {
+              // Successful status flip to Goods In Transit.
+              return {
+                ...p,
+                statusUpdate: {
+                  outcome: 'updated',
+                  reason: 'fully-ordered-eligible',
+                  newStatus: data.newStatus,
+                  previousStatus: data.previousStatus,
+                  errorMessage: null,
+                  retryEndpoint: null,
+                },
+              };
+            }
+            if (res.ok && data.ok && data.skipped === true) {
+              // Idempotent skip — invoice was already in or past target.
+              return {
+                ...p,
+                statusUpdate: {
+                  outcome: 'updated',
+                  reason: 'already-in-or-past-target',
+                  newStatus: data.currentStatus,
+                  errorMessage: null,
+                  retryEndpoint: null,
+                },
+              };
+            }
+            // Failure — surface the new error inside the chip.
+            return {
+              ...p,
+              statusUpdate: {
+                ...(p.statusUpdate || {}),
+                outcome: 'failed',
+                errorMessage: data?.error || 'Retry failed',
+                retryEndpoint: '/api/printavo-status-update',
+              },
+            };
+          }),
+        };
+      });
+    } catch (err) {
+      setConfirmation((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          perInvoice: prev.perInvoice.map((p) =>
+            p.sourceInvoiceId !== invoiceId
+              ? p
+              : {
+                  ...p,
+                  statusUpdate: {
+                    ...(p.statusUpdate || {}),
+                    outcome: 'failed',
+                    errorMessage: err?.message || 'Retry failed',
+                    retryEndpoint: '/api/printavo-status-update',
+                  },
+                },
+          ),
+        };
+      });
+    } finally {
+      setRetryingByInvoiceId((prev) => {
+        const next = { ...prev };
+        delete next[invoiceId];
+        return next;
+      });
+    }
+  }
 
   const lookupItems = useMemo(() => buildStockLookupItems(cart.items), [cart.items]);
   const lookupSignature = useMemo(
@@ -299,13 +422,17 @@ export default function CheckoutPage() {
                     style={{ background: 'var(--background)', borderColor: 'var(--border)' }}
                   >
                     <span className="font-mono">#{entry.sourceInvoiceVisualId}</span>
-                    <StatusChip entry={entry} />
+                    <StatusChip
+                      entry={entry}
+                      onRetry={() => handleRetryStatusUpdate(entry)}
+                      retrying={!!retryingByInvoiceId[entry.sourceInvoiceId]}
+                    />
                   </li>
                 ))}
               </ul>
               {attribution.writeOk === false && (
                 <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠ Attribution record write failed: {attribution.writeError}. Future partial-state derivation for these invoices may show "unavailable" until this is corrected.
+                  ⚠ Attribution record write failed: {attribution.writeError}. Future partial-state derivation for these invoices may show &ldquo;unavailable&rdquo; until this is corrected.
                 </p>
               )}
             </section>
