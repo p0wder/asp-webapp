@@ -482,12 +482,114 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
   );
 }
 
-function InvoiceCard({ invoice, classifications, onAddToCart, onRetry }) {
+/**
+ * Maps a per-line-item SS classification entry to the `source` value the
+ * `/api/orders-partial-state` contract expects.
+ *
+ *  - `matched`             → 'ss-activewear'  (SS Activewear catalog hit)
+ *  - `sanmar` | `no-match` → 'sanmar'         (auto-routed / no SS hit)
+ *  - `pending` | `failed`  → 'unresolved-lookup'
+ *
+ * Callers should skip invoices that have any `pending` classification so the
+ * server isn't asked to evaluate before lookups settle.
+ */
+function classificationToSource(classification) {
+  const s = classification?.state;
+  if (s === 'matched') return 'ss-activewear';
+  if (s === 'sanmar' || s === 'no-match') return 'sanmar';
+  return 'unresolved-lookup';
+}
+
+/**
+ * Drill-down table shown under the partial badge — lists the per-line-item
+ * shortfall surfaced by `/api/orders-partial-state`. Mirrors the look of
+ * the existing OrderOverview table chrome (Tailwind + CSS-var palette).
+ */
+function PartialDrilldown({ summary }) {
+  const rows = summary?.lineItems || [];
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm italic px-1 py-2" style={{ color: 'var(--muted)' }}>
+        No line-item detail available.
+      </p>
+    );
+  }
+
+  const sourceLabel = (src) => {
+    if (src === 'ss-activewear') return 'SS Activewear';
+    if (src === 'sanmar') return 'Sanmar — Auto Order';
+    return 'Lookup pending';
+  };
+
+  return (
+    <div className="mt-2 overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr style={{ borderBottom: '2px solid var(--border)' }}>
+            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Line
+            </th>
+            <th className="text-left py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Source
+            </th>
+            <th className="text-right py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Already Ordered
+            </th>
+            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Still Needed
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((li) => (
+            <tr
+              key={li.sourceLineItemId}
+              style={{ borderBottom: '1px solid var(--border)' }}
+            >
+              <td className="py-2 pr-3 text-xs align-top">
+                <span className="font-mono font-medium">{li.sku || '—'}</span>
+                {li.description ? (
+                  <span style={{ color: 'var(--muted)' }}> · {li.description}</span>
+                ) : null}
+              </td>
+              <td className="py-2 px-3 text-xs align-top" style={{ color: 'var(--muted)' }}>
+                {sourceLabel(li.source)}
+              </td>
+              <td className="py-2 px-3 text-xs text-right align-top font-semibold">
+                {li.alreadyOrdered ?? 0}
+              </td>
+              <td
+                className="py-2 pl-3 text-xs text-right align-top font-semibold"
+                style={{ color: (li.stillNeeded || 0) > 0 ? '#ca8a04' : 'var(--muted)' }}
+              >
+                {li.stillNeeded ?? 0}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function InvoiceCard({ invoice, classifications, partialState, onRetryPartialState, onAddToCart, onRetry }) {
   const [expanded, setExpanded] = useState(false);
+  const [partialOpen, setPartialOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const onAddToCartBound = useCallback(
     (lineItem, variants) => onAddToCart(invoice, lineItem, variants),
     [invoice, onAddToCart],
   );
+
+  const handlePartialRetry = useCallback(async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await onRetryPartialState(invoice);
+    } finally {
+      setRetrying(false);
+    }
+  }, [invoice, onRetryPartialState, retrying]);
 
   const customerName =
     invoice.contact?.fullName?.trim() ||
@@ -519,6 +621,64 @@ function InvoiceCard({ invoice, classifications, onAddToCart, onRetry }) {
           </div>
           <PaidBadge paidInFull={invoice.paidInFull} />
         </div>
+
+        {/* Partial-state badge (FR-013/FR-014/FR-015/FR-020) */}
+        {partialState?.state === 'partial' && partialState.partialItemsSummary && (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setPartialOpen((v) => !v)}
+              aria-expanded={partialOpen}
+              className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-90"
+              style={{
+                background: '#ca8a04',
+                color: '#fff',
+                border: '1px solid #a16207',
+              }}
+            >
+              <span>
+                Partial — {partialState.partialItemsSummary.totalItemsStillNeeded} item
+                {partialState.partialItemsSummary.totalItemsStillNeeded === 1 ? '' : 's'} still need ordering
+              </span>
+              <span
+                className="transition-transform duration-200"
+                style={{ display: 'inline-block', transform: partialOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              >
+                ▾
+              </span>
+            </button>
+            {partialOpen && (
+              <div
+                className="rounded-lg p-3"
+                style={{ background: 'var(--background)', border: '1px solid var(--border)' }}
+              >
+                <PartialDrilldown summary={partialState.partialItemsSummary} />
+              </div>
+            )}
+          </div>
+        )}
+        {partialState?.state === 'unavailable' && (
+          <div
+            className="flex items-center gap-3 self-start px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{
+              background: 'var(--surface)',
+              color: 'var(--muted)',
+              border: '1px solid var(--border)',
+            }}
+            title={partialState.unavailableMessage || partialState.unavailableReason || 'Lookup failed'}
+          >
+            <span>Partial status unavailable</span>
+            <button
+              type="button"
+              onClick={handlePartialRetry}
+              disabled={retrying}
+              className="px-2 py-0.5 rounded text-xs font-semibold transition-opacity disabled:opacity-50"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              {retrying ? 'Retrying…' : 'Retry'}
+            </button>
+          </div>
+        )}
 
         {/* Customer */}
         <div className="flex items-center gap-2 text-sm">
@@ -633,11 +793,53 @@ function InvoiceCard({ invoice, classifications, onAddToCart, onRetry }) {
   );
 }
 
+/**
+ * Build the `/api/orders-partial-state` request body for one invoice.
+ * Returns null when the invoice has no usable line items or any of its
+ * classifications are still pending — the caller should skip those.
+ */
+function buildPartialStateRequestEntry(invoice, classifications) {
+  const groups = invoice.lineItemGroups?.nodes || [];
+  const lineItems = groups.flatMap((g) => g.lineItems?.nodes || []);
+  if (lineItems.length === 0) return null;
+
+  const payloadLines = [];
+  for (const li of lineItems) {
+    const classification = classifications.get(li.id);
+    // Gate: skip whole invoice if any line is still pending (or hasn't been
+    // classified yet). Failed lookups DO resolve — they map to `unresolved-lookup`.
+    if (!classification || classification.state === 'pending') return null;
+
+    const sizeSum = (li.sizes || []).reduce((acc, s) => acc + (s.count || 0), 0);
+    const invoiceQty = li.items != null ? li.items : sizeSum;
+
+    payloadLines.push({
+      sourceLineItemId: li.id,
+      sku: li.itemNumber || '',
+      description: li.description || '',
+      invoiceQty,
+      source: classificationToSource(classification),
+    });
+  }
+
+  if (payloadLines.length === 0) return null;
+
+  return {
+    sourceInvoiceId: invoice.id,
+    sourceInvoiceVisualId: invoice.visualId,
+    lineItems: payloadLines,
+  };
+}
+
 export default function OrdersPage() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
+  // Map keyed by sourceInvoiceVisualId → per-invoice partial-state result
+  // from /api/orders-partial-state. Updated in batch after invoices+
+  // classifications resolve, or per-invoice on manual retry.
+  const [partialStateByInvoiceId, setPartialStateByInvoiceId] = useState(() => new Map());
 
   // Flatten every line item across every loaded invoice into a single list for batch lookup
   const allLineItems = useMemo(
@@ -648,6 +850,134 @@ export default function OrdersPage() {
     [invoices],
   );
   const { classifications, retry } = useLineItemClassification(allLineItems);
+
+  // Batch partial-state lookup. Fires once per (invoices, classifications) pair —
+  // specifically when every line item across every invoice has a non-pending
+  // classification (matched | sanmar | no-match | failed). One POST carries the
+  // whole batch; per-invoice retries take a separate path (handlePartialStateRetry).
+  useEffect(() => {
+    if (invoices.length === 0) return;
+
+    const requestInvoices = [];
+    for (const inv of invoices) {
+      const entry = buildPartialStateRequestEntry(inv, classifications);
+      if (entry) requestInvoices.push(entry);
+    }
+
+    // Not every invoice is ready yet — bail out, the effect re-runs as
+    // classifications populate.
+    if (requestInvoices.length !== invoices.length) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/orders-partial-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoices: requestInvoices }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data.ok) {
+          // Treat the whole batch as unavailable so each card shows a retry button.
+          setPartialStateByInvoiceId(() => {
+            const next = new Map();
+            for (const inv of requestInvoices) {
+              next.set(inv.sourceInvoiceVisualId, {
+                sourceInvoiceVisualId: inv.sourceInvoiceVisualId,
+                state: 'unavailable',
+                partialItemsSummary: null,
+                unavailableReason: 'batch-request-failed',
+                unavailableMessage: data?.error || `HTTP ${res.status}`,
+              });
+            }
+            return next;
+          });
+          return;
+        }
+        setPartialStateByInvoiceId(() => {
+          const next = new Map();
+          for (const r of data.results || []) {
+            next.set(r.sourceInvoiceVisualId, r);
+          }
+          return next;
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setPartialStateByInvoiceId(() => {
+          const next = new Map();
+          for (const inv of requestInvoices) {
+            next.set(inv.sourceInvoiceVisualId, {
+              sourceInvoiceVisualId: inv.sourceInvoiceVisualId,
+              state: 'unavailable',
+              partialItemsSummary: null,
+              unavailableReason: 'batch-request-failed',
+              unavailableMessage: err.message,
+            });
+          }
+          return next;
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [invoices, classifications]);
+
+  // Manual retry — re-POSTs a single invoice (the route accepts an array;
+  // we pass a one-element array) and updates only that invoice's map entry.
+  const handlePartialStateRetry = useCallback(
+    async (invoice) => {
+      const entry = buildPartialStateRequestEntry(invoice, classifications);
+      if (!entry) return;
+      try {
+        const res = await fetch('/api/orders-partial-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoices: [entry] }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          setPartialStateByInvoiceId((prev) => {
+            const next = new Map(prev);
+            next.set(invoice.visualId, {
+              sourceInvoiceVisualId: invoice.visualId,
+              state: 'unavailable',
+              partialItemsSummary: null,
+              unavailableReason: 'batch-request-failed',
+              unavailableMessage: data?.error || `HTTP ${res.status}`,
+            });
+            return next;
+          });
+          return;
+        }
+        const result = (data.results || []).find(
+          (r) => r.sourceInvoiceVisualId === invoice.visualId,
+        );
+        if (!result) return;
+        setPartialStateByInvoiceId((prev) => {
+          const next = new Map(prev);
+          next.set(invoice.visualId, result);
+          return next;
+        });
+      } catch (err) {
+        setPartialStateByInvoiceId((prev) => {
+          const next = new Map(prev);
+          next.set(invoice.visualId, {
+            sourceInvoiceVisualId: invoice.visualId,
+            state: 'unavailable',
+            partialItemsSummary: null,
+            unavailableReason: 'batch-request-failed',
+            unavailableMessage: err.message,
+          });
+          return next;
+        });
+      }
+    },
+    [classifications],
+  );
 
   const { cart, addItem } = useCart();
   const cartTotals = totals(cart);
@@ -808,7 +1138,7 @@ export default function OrdersPage() {
         <div className="text-center py-20" style={{ color: 'var(--muted)' }}>
           <div className="text-5xl mb-4">📦</div>
           <p className="text-lg font-medium">No invoices ready to order</p>
-          <p className="text-sm mt-1">Invoices with "Ready to Order" status will appear here.</p>
+          <p className="text-sm mt-1">Invoices with &ldquo;Ready to Order&rdquo; status will appear here.</p>
         </div>
       )}
 
@@ -820,6 +1150,8 @@ export default function OrdersPage() {
               key={invoice.id}
               invoice={invoice}
               classifications={classifications}
+              partialState={partialStateByInvoiceId.get(invoice.visualId)}
+              onRetryPartialState={handlePartialStateRetry}
               onAddToCart={handleAddToCart}
               onRetry={retry}
             />
