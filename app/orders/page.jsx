@@ -103,6 +103,70 @@ function getRowSizes(lineItem, classification) {
   return { mode: 'ss', sizes, targetQty };
 }
 
+// Printavo invoice prices are set at customer-facing rates; we mark up 15% on
+// these invoices, so cost ≈ printavoPrice × 0.85. Used only as a fallback for
+// rows we can't match to an SS variant (Sanmar, pending, failed).
+const PRINTAVO_MARKUP_INVERSE = 0.85;
+
+/**
+ * Compute the unit price + line total a row will cost us (SS Activewear) — not
+ * what we charge the customer. SS variants carry per-size `customerPrice` (the
+ * wholesale cost SS quotes us), so we sum qty × price across the sizes actually
+ * ordered and surface a range when those sizes span multiple price tiers
+ * (typical for 2XL+ upcharges).
+ *
+ * Returns `{ unitPriceLabel, total }`:
+ *   - matched rows  → SS customerPrice (range if ordered sizes differ)
+ *   - other rows    → Printavo price × 0.85 as a markup-inverse approximation
+ */
+function getRowCost(li, rowSizes, classification, getQty) {
+  const matched =
+    classification?.state === 'matched' && classification.variants?.length > 0;
+
+  if (matched) {
+    const priceBySize = new Map();
+    for (const v of classification.variants) {
+      if (v?.sizeName != null && typeof v.customerPrice === 'number') {
+        priceBySize.set(v.sizeName, v.customerPrice);
+      }
+    }
+
+    let total = 0;
+    let hasAnyOrdered = false;
+    const orderedPrices = new Set();
+    const allPrices = new Set();
+    for (const s of rowSizes.sizes) {
+      const price = priceBySize.get(s.sizeName);
+      if (price == null) continue;
+      allPrices.add(price);
+      const qty = getQty(s);
+      if (qty > 0) {
+        hasAnyOrdered = true;
+        orderedPrices.add(price);
+        total += qty * price;
+      }
+    }
+
+    const pricesForLabel = hasAnyOrdered ? orderedPrices : allPrices;
+    if (pricesForLabel.size === 0) return { unitPriceLabel: null, total: null };
+    const sorted = [...pricesForLabel].sort((a, b) => a - b);
+    const unitPriceLabel =
+      sorted.length === 1
+        ? formatCurrency(sorted[0])
+        : `${formatCurrency(sorted[0])}–${formatCurrency(sorted[sorted.length - 1])}`;
+
+    return { unitPriceLabel, total: hasAnyOrdered ? total : null };
+  }
+
+  if (li.price == null) return { unitPriceLabel: null, total: null };
+  const unitCost = li.price * PRINTAVO_MARKUP_INVERSE;
+  const qty = rowSizes.sizes.reduce((sum, s) => sum + getQty(s), 0);
+  return {
+    unitPriceLabel: formatCurrency(unitCost),
+    total: qty > 0 ? unitCost * qty : null,
+  };
+}
+
 /**
  * Batch-classify every line item across all loaded invoices against the SS Activewear catalog.
  * Returns a map keyed by line-item id plus a retry function for failed items.
@@ -415,7 +479,12 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
               (sum, s) => sum + getQtyForSize(li.id, s),
               0,
             );
-            const lineTotal = li.price != null && qty ? li.price * qty : null;
+            const { unitPriceLabel, total: lineTotal } = getRowCost(
+              li,
+              rowSizes,
+              classification,
+              (s) => getQtyForSize(li.id, s),
+            );
 
             const status =
               qty === 0 ? 'idle'
@@ -458,7 +527,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                   {qty || '—'}
                 </td>
                 <td className="py-2 pl-3 text-right text-xs align-top">
-                  {li.price != null ? formatCurrency(li.price) : '—'}
+                  {unitPriceLabel ?? '—'}
                 </td>
                 <td className="py-2 pl-3 text-right text-xs font-semibold align-top">
                   {lineTotal != null ? formatCurrency(lineTotal) : '—'}
