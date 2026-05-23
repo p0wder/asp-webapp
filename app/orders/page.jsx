@@ -178,6 +178,9 @@ function PaidBadge({ paidInFull }) {
 }
 
 function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }) {
+  // Local state: overrides for size quantities keyed by `${lineItemId}:${sizeLabel}`
+  const [qtyOverrides, setQtyOverrides] = useState({});
+
   if (!lineItemGroups?.nodes?.length) {
     return (
       <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
@@ -209,6 +212,22 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
   const sizeColumns = SIZE_ORDER.filter((s) => usedSizes.has(s));
   // Add "Other" at the end if present
   if (usedSizes.has('Other')) sizeColumns.push('Other');
+
+  function handleQtyChange(lineItemId, size, value) {
+    const parsed = parseInt(value, 10);
+    const next = isNaN(parsed) || parsed < 0 ? 0 : parsed;
+    setQtyOverrides((prev) => ({ ...prev, [`${lineItemId}:${size}`]: next }));
+  }
+
+  // Build an effective line item with overridden sizes for use by onAddToCart
+  function effectiveLineItem(li) {
+    const sizes = (li.sizes || []).map((s) => {
+      const lbl = sizeLabel(s.size);
+      const key = `${li.id}:${lbl}`;
+      return key in qtyOverrides ? { ...s, count: qtyOverrides[key] } : s;
+    });
+    return { ...li, sizes };
+  }
 
   return (
     <div className="mt-3 overflow-x-auto">
@@ -249,13 +268,17 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
         </thead>
         <tbody>
           {allLineItems.map((li) => {
-            // Build a size → count map for this line item
+            // Build a size → count map for this line item (respecting overrides)
             const sizeMap = {};
             (li.sizes || []).forEach((s) => {
-              sizeMap[sizeLabel(s.size)] = s.count;
+              const lbl = sizeLabel(s.size);
+              const key = `${li.id}:${lbl}`;
+              sizeMap[lbl] = key in qtyOverrides ? qtyOverrides[key] : s.count;
             });
 
-            const qty = li.items ?? (li.sizes || []).reduce((sum, s) => sum + (s.count || 0), 0);
+            // Effective qty = sum of all (possibly overridden) size counts
+            const qty = sizeColumns.reduce((sum, s) => sum + (sizeMap[s] || 0), 0) ||
+              (li.items ?? (li.sizes || []).reduce((sum, s) => sum + (s.count || 0), 0));
             const lineTotal = li.price != null && qty ? li.price * qty : null;
 
             return (
@@ -273,15 +296,33 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                 <td className="py-2 pr-3 text-xs max-w-[200px]">
                   {li.description || '—'}
                 </td>
-                {sizeColumns.map((s) => (
-                  <td key={s} className="py-2 px-2 text-center text-xs">
-                    {sizeMap[s] ? (
-                      <span className="font-medium">{sizeMap[s]}</span>
-                    ) : (
-                      <span style={{ color: 'var(--muted)' }}>—</span>
-                    )}
-                  </td>
-                ))}
+                {sizeColumns.map((s) => {
+                  const originalCount = (li.sizes || []).find(
+                    (sz) => sizeLabel(sz.size) === s
+                  )?.count ?? 0;
+                  const key = `${li.id}:${s}`;
+                  const currentVal = key in qtyOverrides ? qtyOverrides[key] : originalCount;
+                  const isModified = key in qtyOverrides && qtyOverrides[key] !== originalCount;
+
+                  return (
+                    <td key={s} className="py-2 px-1 text-center text-xs">
+                      <input
+                        type="number"
+                        min="0"
+                        value={currentVal}
+                        onChange={(e) => handleQtyChange(li.id, s, e.target.value)}
+                        className="w-14 text-center rounded border px-1 py-0.5 text-xs font-medium focus:outline-none focus:ring-2"
+                        style={{
+                          background: isModified ? 'color-mix(in srgb, var(--accent) 12%, var(--surface))' : 'var(--surface)',
+                          borderColor: isModified ? 'var(--accent)' : 'var(--border)',
+                          color: 'var(--foreground)',
+                          '--tw-ring-color': 'var(--accent)',
+                        }}
+                        title={isModified ? `Original: ${originalCount}` : undefined}
+                      />
+                    </td>
+                  );
+                })}
                 <td className="py-2 px-2 text-center text-xs font-semibold">
                   {qty || '—'}
                 </td>
@@ -293,7 +334,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                 </td>
                 <td className="py-2 pl-3 text-right text-xs">
                   <SourcingCell
-                    lineItem={li}
+                    lineItem={effectiveLineItem(li)}
                     result={classifications?.get(li.id)}
                     onAddToCart={onAddToCart}
                     onRetry={onRetry}
