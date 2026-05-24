@@ -46,3 +46,6 @@ next-env.d.ts
 
 # spec-kit / claude agent (may contain auth tokens)
 .claude/
+
+# clerk configuration (can include secrets)
+/.clerk/
