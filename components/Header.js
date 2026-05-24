@@ -31,14 +31,14 @@ export default function Header() {
             className="font-medium nav-link-green transition-colors"
             style={{ color: 'var(--foreground)' }}
           >
-            Orders
+            Purchasing
           </Link>
           <Link
             href="/pipeline"
             className="font-medium nav-link-green transition-colors"
             style={{ color: 'var(--foreground)' }}
           >
-            Quotes
+            Pipeline
           </Link>
           <Link
             href="/services"
@@ -93,7 +93,7 @@ export default function Header() {
             style={{ color: 'var(--foreground)' }}
             onClick={() => setMenuOpen(false)}
           >
-            Orders
+            Purchasing
           </Link>
           <Link
             href="/pipeline"
@@ -101,7 +101,7 @@ export default function Header() {
             style={{ color: 'var(--foreground)' }}
             onClick={() => setMenuOpen(false)}
           >
-            Quotes
+            Pipeline
           </Link>
           <Link
             href="/services"
