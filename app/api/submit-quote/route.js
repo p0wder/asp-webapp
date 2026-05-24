@@ -206,7 +206,7 @@ export async function POST(request) {
     if (promoCodeStr) {
       try {
         const promoFound = await getCodeByString(promoCodeStr);
-        const promoReason = validateCode(promoFound);
+        const promoReason = validateCode(promoFound, new Date().toISOString(), email);
         if (!promoReason && promoFound) {
           const discountAmount = applyDiscount(promoFound, resolvedTotal);
           const discountPerUnit = parseFloat((discountAmount / parsedQty).toFixed(2));

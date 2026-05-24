@@ -19,7 +19,7 @@ export async function PATCH(request, { params }) {
     const existing = await getCode(id);
     if (!existing) return NextResponse.json({ error: 'Promo code not found' }, { status: 404 });
 
-    const EDITABLE = ['enabled', 'value', 'expiresAt', 'maxUses'];
+    const EDITABLE = ['enabled', 'value', 'expiresAt', 'maxUses', 'restrictedToEmail'];
     const updates = {};
     for (const key of EDITABLE) {
       if (key in body) updates[key] = body[key];

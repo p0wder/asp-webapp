@@ -27,7 +27,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { code, type, value, expiresAt, maxUses } = body;
+  const { code, type, value, expiresAt, maxUses, restrictedToEmail } = body;
 
   if (!code || typeof code !== 'string' || !code.trim()) {
     return NextResponse.json({ error: 'code is required' }, { status: 400 });
@@ -55,6 +55,7 @@ export async function POST(request) {
       value: numValue,
       expiresAt: expiresAt || null,
       maxUses: maxUses ? Number(maxUses) : null,
+      restrictedToEmail: restrictedToEmail || null,
     });
 
     await saveCode(promoCode);

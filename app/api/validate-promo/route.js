@@ -25,7 +25,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { code, subtotal } = body;
+  const { code, subtotal, email = null } = body;
 
   if (!code || typeof code !== 'string') {
     return NextResponse.json({ error: 'code is required' }, { status: 400 });
@@ -36,7 +36,7 @@ export async function POST(request) {
 
   try {
     const found = await getCodeByString(code);
-    const reason = validateCode(found);
+    const reason = validateCode(found, new Date().toISOString(), email);
 
     if (reason) {
       return NextResponse.json({ valid: false, message: reason });
@@ -50,6 +50,7 @@ export async function POST(request) {
       type: found.type,
       value: found.value,
       discountAmount,
+      isPersonalized: !!found.restrictedToEmail,
       message: `${found.code} — ${label}`,
     });
   } catch (error) {

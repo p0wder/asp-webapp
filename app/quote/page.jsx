@@ -187,6 +187,7 @@ export default function QuoteForm() {
   const watchedShirtQuality = useWatch({ control, name: "shirtQuality" });
   const watchedLocations = useWatch({ control, name: "locations" });
   const watchedSizes = useWatch({ control, name: undefined });
+  const watchedEmail = useWatch({ control, name: "email" });
 
   const liveEstimate = (() => {
     const qty = parseInt(watchedQty) || 0;
@@ -223,7 +224,7 @@ export default function QuoteForm() {
         const res = await fetch("/api/validate-promo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: promoCode.trim(), subtotal }),
+          body: JSON.stringify({ code: promoCode.trim(), subtotal, email: watchedEmail || null }),
         });
         const data = await res.json();
         setPromoStatus(data);
@@ -234,7 +235,7 @@ export default function QuoteForm() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [promoCode, liveEstimate?.subtotal]);
+  }, [promoCode, liveEstimate?.subtotal, watchedEmail]);
 
   // File upload
   const handleFiles = useCallback(async (files) => {
