@@ -15,13 +15,17 @@ test.describe('Homepage', () => {
     await expect(cta).toHaveAttribute('href', '/quote');
   });
 
-  test('shows three feature cards', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Quality Printing' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Fast Turnaround' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Custom Designs' })).toBeVisible();
+  test('shows service cards (Screen Printing, Embroidery, etc.)', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'Screen Printing' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Embroidery' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'DTF Transfer' })).toBeVisible();
   });
 
-  test('page title is correct', async ({ page }) => {
+  test('shows "Why Customers Choose Thread Giant" section', async ({ page }) => {
+    await expect(page.getByText(/Why Customers Choose/i)).toBeVisible();
+  });
+
+  test('page title contains Thread Giant', async ({ page }) => {
     await expect(page).toHaveTitle(/Thread Giant/i);
   });
 });

@@ -1,6 +1,10 @@
 // @ts-check
 import { defineConfig, devices } from '@playwright/test';
 
+// Allow running tests against a deployed URL:
+//   PLAYWRIGHT_BASE_URL=https://asp-webapp.vercel.app npx playwright test
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -9,21 +13,34 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    ignoreHTTPSErrors: true,
   },
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Use pre-installed headless shell when the default Chromium is unavailable
+        ...(process.env.PLAYWRIGHT_BROWSERS_PATH
+          ? {}
+          : { executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' }),
+      },
     },
     {
       name: 'mobile',
-      use: { ...devices['Pixel 5'] },
+      use: {
+        ...devices['Pixel 5'],
+        ...(process.env.PLAYWRIGHT_BROWSERS_PATH
+          ? {}
+          : { executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' }),
+      },
     },
   ],
-  webServer: {
+  // webServer is only used when testing against localhost (not a deployed URL)
+  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
     command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,

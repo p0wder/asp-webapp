@@ -1,0 +1,53 @@
+import { test, expect } from '@playwright/test';
+
+// Auth-gated routes redirect unauthenticated visitors to /login.
+// Old /orders/* routes permanently redirect to /purchasing/*.
+
+test.describe('Auth-protected route redirects', () => {
+  test('/my-orders redirects to /login when not signed in', async ({ page }) => {
+    await page.goto('/my-orders');
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('/pipeline redirects to /login when not signed in', async ({ page }) => {
+    await page.goto('/pipeline');
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('/purchasing redirects to /login when not signed in', async ({ page }) => {
+    await page.goto('/purchasing');
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('/purchasing/cart redirects to /login when not signed in', async ({ page }) => {
+    await page.goto('/purchasing/cart');
+    await expect(page).toHaveURL(/\/login/);
+  });
+});
+
+test.describe('Legacy /orders route redirects', () => {
+  test('/orders permanently redirects to /purchasing', async ({ page }) => {
+    const response = await page.goto('/orders');
+    // After following redirect, we should be on /purchasing (or /login if auth kicks in)
+    await expect(page).toHaveURL(/\/(purchasing|login)/);
+    // Should not 404
+    expect(response?.status()).not.toBe(404);
+  });
+
+  test('/orders/cart permanently redirects to /purchasing/cart', async ({ page }) => {
+    await page.goto('/orders/cart');
+    await expect(page).toHaveURL(/\/(purchasing\/cart|login)/);
+  });
+
+  test('/orders/checkout permanently redirects to /purchasing/checkout', async ({ page }) => {
+    await page.goto('/orders/checkout');
+    await expect(page).toHaveURL(/\/(purchasing\/checkout|login)/);
+  });
+});
+
+test.describe('/dashboard routing', () => {
+  test('/dashboard redirects unauthenticated visitors to /login', async ({ page }) => {
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/\/login/);
+  });
+});
