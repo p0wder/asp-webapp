@@ -259,8 +259,7 @@ export default function QuoteForm() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) { setSubmitError(json.error || "Something went wrong."); return; }
-      setQuoteData({ quoteId: json.quoteId || null, quoteUrl: json.quoteUrl || null });
-      setSubmitSuccess("Quote submitted! We'll be in touch soon.");
+      setQuoteData({ quoteId: json.quoteId || null, quoteUrl: json.quoteUrl || null, statusUrl: json.statusUrl || null, email: data.email });
     } catch {
       setSubmitError("Network error — please try again.");
     }
@@ -281,6 +280,60 @@ export default function QuoteForm() {
 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto", padding: "2rem 1rem", fontFamily: "inherit" }}>
+
+      {quoteData && (
+        <div style={{ maxWidth: 520, margin: '0 auto', padding: '3rem 1rem', textAlign: 'center' }}>
+          <div style={{ fontSize: 56, marginBottom: '1rem' }}>🎉</div>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--foreground)', margin: '0 0 8px' }}>
+            Quote Submitted!
+          </h1>
+          {quoteData.quoteId && (
+            <p style={{ fontSize: 15, color: 'var(--muted)', margin: '0 0 2rem' }}>
+              Quote <strong style={{ color: 'var(--foreground)' }}>#{quoteData.quoteId}</strong> has been received.
+            </p>
+          )}
+          {/* What happens next */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+            <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', margin: '0 0 1rem' }}>What happens next</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                "We'll review your quote within 1 business day.",
+                `You'll receive an email at ${quoteData.email} when your quote is ready.`,
+                "Once approved, we'll send you a proof to review before production.",
+              ].map((step, i) => (
+                <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#00FF66', color: '#000', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                  <p style={{ fontSize: 14, color: 'var(--foreground)', margin: 0, lineHeight: 1.6 }}>{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Account prompt */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', margin: '0 0 6px' }}>Track your order online</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
+              Create a free account to check your order status and review proofs — no password needed.
+            </p>
+            <a
+              href={`/login?email=${encodeURIComponent(quoteData.email || '')}`}
+              style={{ display: 'inline-block', padding: '10px 24px', borderRadius: 50, background: '#00FF66', color: '#000', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}
+            >
+              Send me a login link →
+            </a>
+            <span style={{ display: 'block', marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+              Not required — you'll receive updates by email either way.
+            </span>
+          </div>
+          <button
+            onClick={() => { setQuoteData(null); setSubmitSuccess(''); }}
+            style={{ padding: '12px 28px', borderRadius: 50, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Start a new quote
+          </button>
+        </div>
+      )}
+      {!quoteData && (
+      <div>
 
       {/* Page heading */}
       <div style={{ marginBottom: "2rem", textAlign: "center" }}>
@@ -684,6 +737,8 @@ export default function QuoteForm() {
         )}
 
       </form>
+      </div>
+      )}
     </div>
   );
 }
