@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useForm, useFieldArray, Controller, useWatch } from "react-hook-form";
+import { useAuth } from "@clerk/nextjs";
 import { calcUnitCost } from "@/lib/pricing";
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -130,6 +131,8 @@ function GarmentChip({ label, selected, onToggle }) {
 // ─── Main Component ────────────────────────────────────────────────────────
 
 export default function QuoteForm() {
+  const { isSignedIn } = useAuth();
+  const [promptDismissed, setPromptDismissed] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedGarments, setSelectedGarments] = useState([]);
   const [locsEnabled, setLocsEnabled] = useState(false);
@@ -308,22 +311,32 @@ export default function QuoteForm() {
               ))}
             </div>
           </div>
-          {/* Account prompt */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'left' }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', margin: '0 0 6px' }}>Track your order online</p>
-            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
-              Create a free account to check your order status and review proofs — no password needed.
-            </p>
-            <a
-              href={`/login?email=${encodeURIComponent(quoteData.email || '')}`}
-              style={{ display: 'inline-block', padding: '10px 24px', borderRadius: 50, background: '#00FF66', color: '#000', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}
-            >
-              Send me a login link →
-            </a>
-            <span style={{ display: 'block', marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
-              Not required — you'll receive updates by email either way.
-            </span>
-          </div>
+          {/* Account prompt — only when not already signed in and not dismissed */}
+          {quoteData && !isSignedIn && !promptDismissed && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', margin: '0 0 6px' }}>Track your order online</p>
+              <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
+                Create a free account to check your order status and review proofs — no password needed.
+              </p>
+              <a
+                href={`/login?email=${encodeURIComponent(quoteData.email || '')}`}
+                style={{ display: 'inline-block', padding: '10px 24px', borderRadius: 50, background: '#00FF66', color: '#000', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}
+              >
+                Send me a login link →
+              </a>
+              <span style={{ display: 'block', marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+                Not required — you'll receive updates by email either way.
+              </span>
+              <button onClick={() => setPromptDismissed(true)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', marginTop: 8, padding: 0 }}>
+                No thanks, I'll watch for emails
+              </button>
+            </div>
+          )}
+          {quoteData && isSignedIn && (
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <a href="/my-orders" style={{ color: '#00FF66', fontWeight: 600, fontSize: 15, textDecoration: 'none' }}>View your orders →</a>
+            </div>
+          )}
           <button
             onClick={() => { setQuoteData(null); setSubmitSuccess(''); }}
             style={{ padding: '12px 28px', borderRadius: 50, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}

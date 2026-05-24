@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { put } from '@vercel/blob';
 import { requireAdmin } from '@/lib/adminAuth';
 import { generateProofToken } from '@/lib/orderStatus';
 
@@ -18,6 +19,12 @@ export async function POST(request) {
   const token = generateProofToken(invoiceId, secret);
   const baseUrl = process.env.NEXTAUTH_URL || 'https://asp-webapp.vercel.app';
   const approvalLink = `${baseUrl}/proof?id=${encodeURIComponent(invoiceId)}&token=${token}`;
+
+  await put(
+    `proofs/invoice-${invoiceId}.json`,
+    JSON.stringify({ proofUrl, invoiceId, uploadedAt: new Date().toISOString(), decision: null, decisionNotes: null }),
+    { access: 'public', addRandomSuffix: false }
+  );
 
   return NextResponse.json({ success: true, proofUrl, approvalLink });
 }
