@@ -8,17 +8,16 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const data = await gql(`{
-    statuses {
-      nodes {
-        id
-        name
-        color
-        isDefault
-        isArchived
-      }
-    }
-  }`);
+  // Pull statuses from both quotes and invoices (last 100 each)
+  const [quotesData, invoicesData] = await Promise.all([
+    gql(`{ quotes(first: 100) { nodes { status { id name color } } } }`),
+    gql(`{ invoices(first: 100) { nodes { status { id name color } } } }`).catch(() => ({ invoices: { nodes: [] } })),
+  ]);
 
-  return NextResponse.json(data.statuses?.nodes || []);
+  const seen = new Map();
+  for (const node of [...(quotesData.quotes?.nodes || []), ...(invoicesData.invoices?.nodes || [])]) {
+    if (node.status?.id) seen.set(node.status.id, node.status);
+  }
+
+  return NextResponse.json([...seen.values()].sort((a, b) => a.name.localeCompare(b.name)));
 }
