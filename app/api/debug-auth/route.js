@@ -10,7 +10,8 @@ export async function GET() {
     sessionClaims,
     publicMetadata: user?.publicMetadata ?? null,
     primaryEmail: user?.emailAddresses?.find(e => e.id === user.primaryEmailAddressId)?.emailAddress ?? null,
-    roleFromClaims: sessionClaims?.metadata?.role ?? null,
+    roleFromClaimsMetadata: sessionClaims?.metadata?.role ?? null,
+    roleFromClaimsDirect: sessionClaims?.role ?? null,
     roleFromMetadata: user?.publicMetadata?.role ?? null,
     claimsKeys: sessionClaims ? Object.keys(sessionClaims) : [],
   });
