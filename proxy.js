@@ -32,9 +32,14 @@ export async function proxy(request) {
 export const config = {
   matcher: [
     '/orders/:path*',
+    '/quotes/:path*',
     '/api/ready-to-order/:path*',
+    '/api/quotes/:path*',
     '/api/place-order/:path*',
     '/api/printavo-status-update/:path*',
     '/api/orders-partial-state/:path*',
+    '/api/ss-catalog-lookup/:path*',
+    '/api/payment-profiles/:path*',
+    '/api/search-products/:path*',
   ],
 };

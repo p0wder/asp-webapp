@@ -137,6 +137,7 @@ export default function QuoteForm() {
   const [dragOver, setDragOver] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+  const [quoteData, setQuoteData] = useState(null); // { quoteId, quoteUrl } from Printavo
   const [garmentPricing, setGarmentPricing] = useState({});
   const [sizeBreakdown, setSizeBreakdown] = useState(false);
 
@@ -258,6 +259,7 @@ export default function QuoteForm() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) { setSubmitError(json.error || "Something went wrong."); return; }
+      setQuoteData({ quoteId: json.quoteId || null, quoteUrl: json.quoteUrl || null });
       setSubmitSuccess("Quote submitted! We'll be in touch soon.");
     } catch {
       setSubmitError("Network error — please try again.");
