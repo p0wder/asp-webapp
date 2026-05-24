@@ -6,8 +6,9 @@ import { NextResponse } from 'next/server';
 function isSameOrigin(request) {
   const origin = request.headers.get('origin');
   if (!origin) return false;
-  const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-  return origin === appUrl || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return true;
+  const host = request.headers.get('host');
+  return host ? origin === `https://${host}` : false;
 }
 
 import {
