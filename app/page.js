@@ -3,25 +3,29 @@ import Image from 'next/image';
 import { portfolioImages } from '@/lib/portfolioImages';
 
 // ─── Static content ──────────────────────────────────────────────────────────
-// TODO: confirm these numbers with the business owner before going to production
 
 const STATS = [
   { value: '500+', label: 'Orders Completed' },
   { value: '10+', label: 'Years in Business' },
   { value: '2 Weeks', label: 'Standard Turnaround' },
-  { value: '5-Star', label: 'Customer Rated' },
+  { value: '5-Star', label: 'Google Rated' },
 ];
 
 const TESTIMONIALS = [
   {
-    quote: "Thread Giant knocked it out of the park. Shirts arrived on time, colors were perfect, and the whole process was painless.",
-    name: "TODO: Customer Name",
-    company: "TODO: Company",
+    quote: "Once again! Thread Giant delivered an amazing product. The entire process was great. From the quote, to draft, to receiving the final product. 10/10 recommend!",
+    name: "Scottie G",
+    company: "Google Review",
   },
   {
-    quote: "We've used Thread Giant for three seasons of team uniforms. Every order is exactly what we asked for.",
-    name: "TODO: Customer Name",
-    company: "TODO: Company / Team",
+    quote: "I had a rush to have a sweatshirt made to do an interview on KTIV in less than 24 hours. Not only did they get it done they exceeded my expectations and did an absolute amazing job. Definitely coming back to them for our London Marathon shirts!",
+    name: "Anthony Kelly",
+    company: "Google Review",
+  },
+  {
+    quote: "My shirts turned out PERFECT. Exactly what I asked for and he was very nice and got them done really fast. I highly recommend going through him if you are in a jam of getting something made. Very great on communicating as well!",
+    name: "Mckenzie Noble",
+    company: "Google Review",
   },
 ];
 
@@ -59,7 +63,6 @@ export default function Home() {
       </div>
 
       {/* ── Buying signals ─────────────────────────────────────────────────── */}
-      {/* TODO: confirm turnaround times and minimums with business owner */}
       <div
         className="grid grid-cols-2 md:grid-cols-4 gap-6 py-12"
         style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}
@@ -77,7 +80,6 @@ export default function Home() {
 
       {/* ── Quick specs bar ────────────────────────────────────────────────── */}
       <div className="flex flex-wrap justify-center gap-x-10 gap-y-3 py-8 text-sm" style={{ color: 'var(--muted)' }}>
-        {/* TODO: confirm exact numbers with business owner */}
         <span>✓ <strong style={{ color: 'var(--foreground)' }}>12-piece minimum</strong> on screen printing</span>
         <span>✓ <strong style={{ color: 'var(--foreground)' }}>No minimum</strong> on DTF transfers</span>
         <span>✓ Standard turnaround <strong style={{ color: 'var(--foreground)' }}>10–14 business days</strong></span>
@@ -101,8 +103,7 @@ export default function Home() {
         </div>
 
         {/* Testimonials */}
-        {/* TODO: replace placeholder copy with real customer testimonials */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
           {TESTIMONIALS.map((t, i) => (
             <div
               key={i}
