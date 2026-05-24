@@ -21,13 +21,11 @@ import {
   createImprint,
   createLineItemMockup,
   findProductId,
+  QUOTE_STATUS_ID,
 } from '@/lib/printavo';
 import { calcUnitCost } from '@/lib/pricing';
 import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
 import { generateStatusToken } from '@/lib/orderStatus';
-
-// Printavo status ID for "Quote"
-const QUOTE_STATUS_ID = '256246';
 
 // Printavo category ID for Screen Printing (from original code)
 const SCREEN_PRINTING_CATEGORY_ID = '178403';

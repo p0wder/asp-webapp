@@ -2,7 +2,7 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { getCustomerEmail } from '@/lib/customerAuth';
 import { getInvoicesByCustomerEmail } from '@/lib/printavo';
-import { generateStatusToken, generateProofToken } from '@/lib/orderStatus';
+import { generateStatusToken, generateProofToken, generateQuoteApprovalToken } from '@/lib/orderStatus';
 import Link from 'next/link';
 
 function formatDate(str) {
@@ -69,9 +69,12 @@ export default async function MyOrdersPage() {
           {invoices.map((inv) => {
             const statusUrl = secret ? `/order-status?id=${inv.id}&token=${generateStatusToken(inv.id, secret)}` : null;
             const proofUrl = secret ? `/proof?id=${inv.id}&token=${generateProofToken(inv.id, secret)}` : null;
+            const quoteApprovalUrl = secret ? `/quote-approval?id=${inv.id}&token=${generateQuoteApprovalToken(inv.id, secret)}` : null;
             const payUrl = `/pay?invoiceId=${inv.id}&amount=${Math.round((inv.total || 0) * 100)}`;
-            const showProof = inv.status?.name?.toLowerCase().includes('art approval');
-            const showPay = inv.total != null && inv.total > 0;
+            const statusLower = inv.status?.name?.toLowerCase() || '';
+            const showProof = statusLower.includes('art approval');
+            const showApproveQuote = statusLower.includes('quote approval sent') || statusLower.includes('urgent follow up on quote');
+            const showPay = inv.total != null && inv.total > 0 && !showApproveQuote;
             return (
               <div key={inv.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
@@ -90,6 +93,9 @@ export default async function MyOrdersPage() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {statusUrl && (
                     <Link href={statusUrl} style={ghostBtn}>Track order</Link>
+                  )}
+                  {showApproveQuote && quoteApprovalUrl && (
+                    <Link href={quoteApprovalUrl} style={greenBtn}>Approve Quote</Link>
                   )}
                   {showProof && proofUrl && (
                     <Link href={proofUrl} style={ghostBtn}>Review Proof</Link>

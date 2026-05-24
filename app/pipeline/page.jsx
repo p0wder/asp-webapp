@@ -37,6 +37,54 @@ function StatusBadge({ name, color }) {
   );
 }
 
+// Pinned quote-stage filter tabs shown before the dynamic ones.
+const PINNED_TABS = [
+  { label: 'Needs Approval', matches: ['quote approval sent', 'urgent follow up on quote'] },
+  { label: 'Quote Approved', matches: ['quote approved'] },
+  { label: 'Open Quotes',    matches: ['quote'] },
+];
+
+function quoteMatchesPinnedTab(quote, tab) {
+  const name = (quote.status?.name || '').toLowerCase();
+  return tab.matches.some((m) => name.includes(m));
+}
+
+function QuoteApprovalLink({ quoteId }) {
+  const [copied, setCopied] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function fetchAndCopy() {
+    setFetching(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/quote-approval-link?id=${encodeURIComponent(quoteId)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate link');
+      await navigator.clipboard.writeText(data.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 2 }}>
+      <button
+        onClick={fetchAndCopy}
+        disabled={fetching}
+        style={{ fontSize: 12, color: copied ? '#00FF66' : 'var(--muted)', background: 'none', border: 'none', cursor: fetching ? 'wait' : 'pointer', padding: 0, fontFamily: 'inherit', textDecoration: 'underline', opacity: fetching ? 0.6 : 1 }}
+      >
+        {fetching ? 'Generating…' : copied ? 'Approval link copied!' : 'Copy customer approval link'}
+      </button>
+      {error && <span style={{ fontSize: 11, color: '#ff4444', marginLeft: 6 }}>{error}</span>}
+    </div>
+  );
+}
+
 function ProofUpload({ quoteId }) {
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -215,6 +263,10 @@ function QuoteCard({ quote, allStatuses, onStatusUpdate }) {
           </div>
         )}
 
+        {PINNED_TABS[0].matches.some((m) => (quote.status?.name || '').toLowerCase().includes(m)) && (
+          <QuoteApprovalLink quoteId={quote.id} />
+        )}
+
         <ProofUpload quoteId={quote.id} />
 
         {/* Inline status update */}
@@ -260,7 +312,7 @@ export default function QuotesDashboard() {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState('All');
+  const [filter, setFilter] = useState('Needs Approval');
 
   useEffect(() => {
     fetch('/api/quotes')
@@ -288,11 +340,22 @@ export default function QuotesDashboard() {
     );
   }
 
-  const statuses = ['All', ...Array.from(new Set(quotes.map((q) => q.status?.name).filter(Boolean)))];
+  // Build tab list: pinned tabs first, then "All"
+  const tabs = [
+    ...PINNED_TABS.map((tab) => ({
+      label: tab.label,
+      count: quotes.filter((q) => quoteMatchesPinnedTab(q, tab)).length,
+      filter: tab.label,
+    })),
+    { label: 'All', count: quotes.length, filter: 'All' },
+  ];
 
   const visible = filter === 'All'
     ? quotes
-    : quotes.filter((q) => q.status?.name === filter);
+    : quotes.filter((q) => {
+        const tab = PINNED_TABS.find((t) => t.label === filter);
+        return tab ? quoteMatchesPinnedTab(q, tab) : true;
+      });
 
   const card = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem' };
 
@@ -324,10 +387,10 @@ export default function QuotesDashboard() {
         <>
           {/* Status filter tabs */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-            {statuses.map((s) => (
+            {tabs.map(({ label, count, filter: tabFilter }) => (
               <button
-                key={s}
-                onClick={() => setFilter(s)}
+                key={label}
+                onClick={() => setFilter(tabFilter)}
                 style={{
                   padding: '6px 16px',
                   borderRadius: 20,
@@ -335,16 +398,13 @@ export default function QuotesDashboard() {
                   fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
-                  border: filter === s ? '1px solid #00FF66' : '1px solid var(--border)',
-                  background: filter === s ? 'rgba(0,255,102,0.1)' : 'var(--surface)',
-                  color: filter === s ? '#00FF66' : 'var(--muted)',
+                  border: filter === tabFilter ? '1px solid #00FF66' : '1px solid var(--border)',
+                  background: filter === tabFilter ? 'rgba(0,255,102,0.1)' : 'var(--surface)',
+                  color: filter === tabFilter ? '#00FF66' : 'var(--muted)',
                   transition: 'all 0.15s',
                 }}
               >
-                {s}
-                {s === 'All'
-                  ? ` (${quotes.length})`
-                  : ` (${quotes.filter((q) => q.status?.name === s).length})`}
+                {label} ({count})
               </button>
             ))}
           </div>
@@ -352,7 +412,7 @@ export default function QuotesDashboard() {
           {/* Quote list */}
           {visible.length === 0 ? (
             <div style={{ ...card, textAlign: 'center', color: 'var(--muted)', padding: '3rem' }}>
-              {filter === 'All' ? 'No open quotes found.' : `No quotes with status "${filter}".`}
+              {filter === 'All' ? 'No open quotes found.' : `No quotes in "${filter}".`}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -18,6 +18,7 @@ const isAdminRoute = createRouteMatcher([
   '/api/search-products(.*)',
   '/api/quote-status-update(.*)',
   '/api/proof-upload(.*)',
+  '/api/quote-approval-link(.*)',
 ]);
 
 export const proxy = clerkMiddleware(async (auth, request) => {
