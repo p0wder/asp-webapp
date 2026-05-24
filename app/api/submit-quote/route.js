@@ -25,6 +25,8 @@ import {
 import { calcUnitCost } from '@/lib/pricing';
 import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
 import { generateStatusToken } from '@/lib/orderStatus';
+import { getCodeByString } from '@/lib/promoCodesStorage';
+import { validateCode, applyDiscount, incrementUse, discountLabel } from '@/lib/promoCodes';
 
 // Printavo status ID for "Quote"
 const QUOTE_STATUS_ID = '256246';
@@ -78,6 +80,7 @@ export async function POST(request) {
       shirtColor = null,
       billingAddress = null,
       shippingAddress = null,
+      promoCode: promoCodeStr = null,
     } = body;
 
     // ── Build job nickname ──────────────────────────────────────────────────
@@ -195,8 +198,36 @@ export async function POST(request) {
     // ── 5. Calculate decoration cost from pricing matrix ─────────────────────
     // Unit sell price = garment (with 115% markup) + decoration cost from matrix
     const decorationCost = calcUnitCost(parsedQty, parsedInkColors, locsEnabled, locations) ?? 0;
-    const resolvedUnitCost = parseFloat((garmentCostWithMarkup + decorationCost).toFixed(2));
-    const resolvedTotal = parseFloat((resolvedUnitCost * parsedQty).toFixed(2));
+    let resolvedUnitCost = parseFloat((garmentCostWithMarkup + decorationCost).toFixed(2));
+    let resolvedTotal = parseFloat((resolvedUnitCost * parsedQty).toFixed(2));
+
+    // ── 5a. Apply promo code discount (if provided and valid) ────────────────
+    let appliedPromo = null;
+    if (promoCodeStr) {
+      try {
+        const promoFound = await getCodeByString(promoCodeStr);
+        const promoReason = validateCode(promoFound);
+        if (!promoReason && promoFound) {
+          const discountAmount = applyDiscount(promoFound, resolvedTotal);
+          const discountPerUnit = parseFloat((discountAmount / parsedQty).toFixed(2));
+          resolvedUnitCost = parseFloat(Math.max(0, resolvedUnitCost - discountPerUnit).toFixed(2));
+          resolvedTotal = parseFloat(Math.max(0, resolvedTotal - discountAmount).toFixed(2));
+          appliedPromo = { code: promoFound.code, label: discountLabel(promoFound), discountAmount };
+          // Increment usage count — non-fatal if this fails
+          try {
+            const { saveCode } = await import('@/lib/promoCodesStorage');
+            await saveCode(incrementUse(promoFound));
+          } catch (err) {
+            console.warn('[submit-quote] could not increment promo use count:', err.message);
+          }
+          console.log(`[submit-quote] promo=${promoFound.code} discount=$${discountAmount} newTotal=$${resolvedTotal}`);
+        } else if (promoReason) {
+          console.warn(`[submit-quote] promo code "${promoCodeStr}" rejected: ${promoReason}`);
+        }
+      } catch (err) {
+        console.warn('[submit-quote] promo code lookup failed:', err.message);
+      }
+    }
 
     console.log(`[submit-quote] qty=${parsedQty} wholesale=$${wholesaleGarmentCost} garment(115%)=$${garmentCostWithMarkup} decoration=$${decorationCost} unitPrice=$${resolvedUnitCost} total=$${resolvedTotal}`);
 
@@ -312,6 +343,7 @@ export async function POST(request) {
       printavoId: quote.id,          // node ID used for API lookups
       quoteUrl: quote.publicUrl,     // Printavo-hosted quote URL
       statusUrl,                     // /order-status?id=…&token=… (null if secret not set)
+      appliedPromo,                  // { code, label, discountAmount } or null
     });
   } catch (error) {
     console.error('Error submitting quote to Printavo:', error);
