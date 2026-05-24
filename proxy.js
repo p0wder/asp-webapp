@@ -29,6 +29,15 @@ export const proxy = clerkMiddleware(async (auth, request) => {
     const { userId, sessionClaims } = await auth();
     const isAdmin = userId && sessionClaims?.metadata?.role === 'admin';
 
+    console.log('[proxy] admin route check', {
+      path: request.nextUrl.pathname,
+      userId,
+      role: sessionClaims?.metadata?.role,
+      metadataKeys: sessionClaims?.metadata ? Object.keys(sessionClaims.metadata) : null,
+      claimsKeys: sessionClaims ? Object.keys(sessionClaims) : null,
+      isAdmin,
+    });
+
     if (!isAdmin) {
       const { pathname } = request.nextUrl;
 
