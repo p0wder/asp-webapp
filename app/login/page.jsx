@@ -3,13 +3,17 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Image from 'next/image';
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }) {
   const { userId } = await auth();
   if (userId) {
     const user = await currentUser();
     if (user?.publicMetadata?.role === 'admin') redirect('/orders');
     redirect('/my-orders');
   }
+
+  // callbackUrl comes from our proxy.js admin redirects; let Clerk handle
+  // its native redirect_url (from auth.protect()) automatically.
+  const forceRedirectUrl = searchParams?.callbackUrl || undefined;
 
   return (
     <div
@@ -29,6 +33,7 @@ export default async function LoginPage() {
         </div>
 
         <SignIn
+          forceRedirectUrl={forceRedirectUrl}
           appearance={{
             variables: {
               colorPrimary: '#00FF66',
