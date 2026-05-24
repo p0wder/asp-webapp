@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getInvoiceById } from '@/lib/printavo';
-import { verifyStatusToken } from '@/lib/orderStatus';
+import { verifyStatusAccess } from '@/lib/accessControl';
 
-// HMAC token signed at quote submission prevents enumeration of invoice IDs
+// Supports both HMAC token access (unauthenticated) and Clerk session access (logged-in customers)
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
@@ -20,9 +20,9 @@ export async function GET(request) {
 
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
-  const secret = process.env.STATUS_TOKEN_SECRET;
-  if (!verifyStatusToken(id, token, secret)) {
-    return NextResponse.json({ error: 'Invalid or missing token' }, { status: 403 });
+  const access = await verifyStatusAccess(id, invoice, { token });
+  if (!access.granted) {
+    return NextResponse.json({ error: 'Invalid or missing token' }, { status: access.status ?? 403 });
   }
 
   return NextResponse.json({

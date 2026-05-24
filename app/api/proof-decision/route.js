@@ -1,27 +1,31 @@
 import { NextResponse } from 'next/server';
 import { put, list } from '@vercel/blob';
-import { setQuoteStatus, ART_APPROVED_STATUS_ID, DESIGN_NEEDED_STATUS_ID } from '@/lib/printavo';
-import { verifyProofToken } from '@/lib/orderStatus';
+import { getInvoiceById, setQuoteStatus, ART_APPROVED_STATUS_ID, DESIGN_NEEDED_STATUS_ID } from '@/lib/printavo';
+import { verifyProofAccess } from '@/lib/accessControl';
 
+// Supports both HMAC token access (unauthenticated) and Clerk session access (logged-in customers)
 export async function POST(request) {
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid body' }, { status: 400 }); }
 
   const { invoiceId, token, decision, notes } = body;
 
-  if (!invoiceId || !token || !decision) {
-    return NextResponse.json({ error: 'invoiceId, token, and decision are required' }, { status: 400 });
+  if (!invoiceId || !decision) {
+    return NextResponse.json({ error: 'invoiceId and decision are required' }, { status: 400 });
   }
 
   if (!['approved', 'changes_requested'].includes(decision)) {
     return NextResponse.json({ error: 'Invalid decision' }, { status: 400 });
   }
 
-  const secret = process.env.STATUS_TOKEN_SECRET;
-  if (!secret) return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+  // Fetch invoice to get contact email for Clerk access check
+  let invoice = null;
+  try { invoice = await getInvoiceById(invoiceId); } catch { /* non-fatal */ }
+  if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
-  if (!verifyProofToken(invoiceId, token, secret)) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 403 });
+  const access = await verifyProofAccess(invoiceId, invoice, { token });
+  if (!access.granted) {
+    return NextResponse.json({ error: 'Invalid token' }, { status: access.status ?? 403 });
   }
 
   // Read existing blob

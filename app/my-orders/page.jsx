@@ -2,6 +2,7 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { getCustomerEmail } from '@/lib/customerAuth';
 import { getInvoicesByCustomerEmail } from '@/lib/printavo';
+import { generateStatusToken, generateProofToken } from '@/lib/orderStatus';
 import Link from 'next/link';
 
 function formatDate(str) {
@@ -37,7 +38,11 @@ export default async function MyOrdersPage() {
     error = 'Could not load your orders. Please try again later.';
   }
 
+  const secret = process.env.STATUS_TOKEN_SECRET;
+
   const card = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem' };
+  const ghostBtn = { display: 'inline-block', padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: '1px solid var(--border)', color: 'var(--foreground)', textDecoration: 'none' };
+  const greenBtn = { display: 'inline-block', padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#00FF66', color: '#000', textDecoration: 'none' };
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '2rem 1rem' }}>
@@ -61,23 +66,41 @@ export default async function MyOrdersPage() {
 
       {invoices.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {invoices.map((inv) => (
-            <div key={inv.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', marginBottom: 2 }}>
-                    {inv.nickname || '(no job name)'}
+          {invoices.map((inv) => {
+            const statusUrl = secret ? `/order-status?id=${inv.id}&token=${generateStatusToken(inv.id, secret)}` : null;
+            const proofUrl = secret ? `/proof?id=${inv.id}&token=${generateProofToken(inv.id, secret)}` : null;
+            const payUrl = `/pay?invoiceId=${inv.id}&amount=${Math.round((inv.total || 0) * 100)}`;
+            const showProof = inv.status?.name?.toLowerCase().includes('art approval');
+            const showPay = inv.total != null && inv.total > 0;
+            return (
+              <div key={inv.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', marginBottom: 2 }}>
+                      {inv.nickname || '(no job name)'}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      Order <strong style={{ color: 'var(--foreground)' }}>#{inv.visualId}</strong>
+                      {inv.customerDueAt && <> · Due <strong style={{ color: 'var(--foreground)' }}>{formatDate(inv.customerDueAt)}</strong></>}
+                      {inv.total != null && <> · <strong style={{ color: 'var(--foreground)' }}>{formatCurrency(inv.total)}</strong></>}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                    Order <strong style={{ color: 'var(--foreground)' }}>#{inv.visualId}</strong>
-                    {inv.customerDueAt && <> · Due <strong style={{ color: 'var(--foreground)' }}>{formatDate(inv.customerDueAt)}</strong></>}
-                    {inv.total != null && <> · <strong style={{ color: 'var(--foreground)' }}>{formatCurrency(inv.total)}</strong></>}
-                  </div>
+                  <StatusBadge name={inv.status?.name} color={inv.status?.color} />
                 </div>
-                <StatusBadge name={inv.status?.name} color={inv.status?.color} />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {statusUrl && (
+                    <Link href={statusUrl} style={ghostBtn}>Track order</Link>
+                  )}
+                  {showProof && proofUrl && (
+                    <Link href={proofUrl} style={ghostBtn}>Review Proof</Link>
+                  )}
+                  {showPay && (
+                    <Link href={payUrl} style={greenBtn}>Pay</Link>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
