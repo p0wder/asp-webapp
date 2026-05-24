@@ -1,54 +1,22 @@
-'use client';
-
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { SignIn } from '@clerk/nextjs';
+import { auth, currentUser } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 import Image from 'next/image';
-import { Suspense } from 'react';
 
-function LoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/orders';
-  const errorParam = searchParams.get('error');
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(
-    errorParam === 'CredentialsSignin' ? 'Invalid email or password.' : null
-  );
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-    });
-
-    if (result?.error) {
-      setError('Invalid email or password.');
-      setLoading(false);
-    } else {
-      router.refresh();
-      router.push(callbackUrl);
-    }
+export default async function LoginPage() {
+  const { userId } = await auth();
+  if (userId) {
+    const user = await currentUser();
+    if (user?.publicMetadata?.role === 'admin') redirect('/orders');
+    redirect('/my-orders');
   }
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4"
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-12"
       style={{ background: 'var(--background)' }}
     >
-      <div
-        className="w-full max-w-md rounded-2xl border p-8 shadow-lg"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-      >
-        {/* Logo */}
+      <div style={{ width: '100%', maxWidth: 420 }}>
         <div className="flex justify-center mb-8">
           <Image
             src="/thread-giant-logo-1.png"
@@ -60,113 +28,36 @@ function LoginForm() {
           />
         </div>
 
-        <h1 className="text-2xl font-bold text-center mb-2" style={{ color: 'var(--foreground)' }}>
-          Admin Sign In
-        </h1>
-        <p className="text-sm text-center mb-8" style={{ color: 'var(--muted)' }}>
-          Thread Giant internal portal
-        </p>
+        <SignIn
+          appearance={{
+            variables: {
+              colorPrimary: '#00FF66',
+              colorBackground: 'var(--surface)',
+              colorText: 'var(--foreground)',
+              colorTextSecondary: 'var(--muted)',
+              colorInputBackground: 'var(--background)',
+              colorInputText: 'var(--foreground)',
+              borderRadius: '10px',
+            },
+            elements: {
+              card: {
+                boxShadow: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+              },
+              headerTitle: { display: 'none' },
+              headerSubtitle: { display: 'none' },
+            },
+          }}
+        />
 
-        {/* Error message */}
-        {error && (
-          <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 text-sm">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--foreground)' }}
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-lg border text-sm outline-none focus:ring-2 transition-shadow"
-              style={{
-                background: 'var(--background)',
-                borderColor: 'var(--border)',
-                color: 'var(--foreground)',
-              }}
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--foreground)' }}
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-lg border text-sm outline-none focus:ring-2 transition-shadow"
-              style={{
-                background: 'var(--background)',
-                borderColor: 'var(--border)',
-                color: 'var(--foreground)',
-              }}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-lg font-semibold text-white transition-opacity hover:opacity-85 disabled:opacity-50 mt-2"
-            style={{ background: 'var(--accent)' }}
-          >
-            {loading ? 'Signing in…' : 'Sign In'}
-          </button>
-        </form>
-
-        {/* Google OAuth placeholder — uncomment when credentials are configured */}
-        {/*
-        <div className="mt-4 flex items-center gap-3">
-          <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>or</span>
-          <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-        </div>
-        <button
-          onClick={() => signIn('google', { callbackUrl })}
-          className="mt-4 w-full py-3 rounded-lg font-medium border flex items-center justify-center gap-2 transition-opacity hover:opacity-85"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
-          Sign in with Google
-        </button>
-        */}
-
-        <p className="mt-6 text-center text-xs" style={{ color: 'var(--muted)' }}>
-          Not an admin?{' '}
-          <a href="/account/login" style={{ color: '#00FF66', textDecoration: 'none', fontWeight: 600 }}>
-            Track your order →
+        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: 13, color: 'var(--muted)' }}>
+          New customer?{' '}
+          <a href="/quote" style={{ color: '#00FF66', textDecoration: 'none', fontWeight: 600 }}>
+            Get a free quote →
           </a>
         </p>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
   );
 }

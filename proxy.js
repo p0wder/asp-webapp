@@ -1,11 +1,10 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 
-// Customer routes protected by Clerk (magic link / OTP)
+// Customer routes protected by Clerk (magic link / OTP / OAuth)
 const isProtectedCustomerRoute = createRouteMatcher(['/my-orders(.*)']);
 
-// Admin routes protected by NextAuth credentials
+// Admin routes protected by Clerk with role: admin
 const isAdminRoute = createRouteMatcher([
   '/orders(.*)',
   '/quotes(.*)',
@@ -19,19 +18,16 @@ const isAdminRoute = createRouteMatcher([
   '/api/search-products(.*)',
 ]);
 
-// Export as `proxy` — this Next.js version's middleware convention
 export const proxy = clerkMiddleware(async (auth, request) => {
   if (isProtectedCustomerRoute(request)) {
     await auth.protect();
   }
 
   if (isAdminRoute(request)) {
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
+    const { userId, sessionClaims } = await auth();
+    const isAdmin = userId && sessionClaims?.metadata?.role === 'admin';
 
-    if (!token) {
+    if (!isAdmin) {
       const { pathname } = request.nextUrl;
 
       if (pathname.startsWith('/api/')) {

@@ -1,6 +1,5 @@
+import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import {
   getInvoicesByIds,
   setInvoiceStatus,
@@ -19,7 +18,7 @@ import {
  *
  * Defence-in-depth auth per Principle VII:
  *   - Matcher entry in `proxy.js` (admin-gated edge auth) — already present.
- *   - `getServerSession(authOptions)` below.
+ *   - `requireAdmin()` below.
  *
  * Route stays thin per Principle III: auth → validate → delegate to
  * `lib/printavo.js` → respond.
@@ -31,8 +30,8 @@ import {
 const ALLOWED_TARGET_STATUS_IDS = new Set([GOODS_IN_TRANSIT_STATUS_ID]);
 
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const isAdmin = await requireAdmin();
+  if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

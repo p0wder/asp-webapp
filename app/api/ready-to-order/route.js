@@ -1,6 +1,5 @@
+import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { gql, READY_TO_ORDER_STATUS_ID } from '@/lib/printavo';
 
 /**
@@ -11,8 +10,8 @@ import { gql, READY_TO_ORDER_STATUS_ID } from '@/lib/printavo';
  */
 export async function GET() {
   // ── Auth guard: admin session required ──────────────────────────────────
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const isAdmin = await requireAdmin();
+  if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
