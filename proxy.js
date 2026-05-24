@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 // Customer routes protected by Clerk (magic link / OTP / OAuth)
@@ -26,15 +26,18 @@ export const proxy = clerkMiddleware(async (auth, request) => {
   }
 
   if (isAdminRoute(request)) {
-    const { userId, sessionClaims } = await auth();
-    const isAdmin = userId && sessionClaims?.metadata?.role === 'admin';
+    const { userId } = await auth();
+    let isAdmin = false;
+
+    if (userId) {
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      isAdmin = user?.publicMetadata?.role === 'admin';
+    }
 
     console.log('[proxy] admin route check', {
       path: request.nextUrl.pathname,
       userId,
-      role: sessionClaims?.metadata?.role,
-      metadataKeys: sessionClaims?.metadata ? Object.keys(sessionClaims.metadata) : null,
-      claimsKeys: sessionClaims ? Object.keys(sessionClaims) : null,
       isAdmin,
     });
 
