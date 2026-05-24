@@ -8,21 +8,38 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Introspect root query fields to find status-related queries
-  const introData = await gql(`{
-    __schema {
-      queryType {
-        fields {
-          name
-        }
+  // Introspect the statuses field to learn its return type shape
+  const typeData = await gql(`{
+    __type(name: "Query") {
+      fields {
+        name
+        type { name kind ofType { name kind } }
+        args { name type { name kind ofType { name kind } } }
       }
     }
   }`);
 
-  const fields = introData.__schema?.queryType?.fields?.map(f => f.name) || [];
+  const statusesField = typeData.__type?.fields?.find(f => f.name === 'statuses');
 
-  // Try any field that looks status-related
-  const statusFields = fields.filter(f => f.toLowerCase().includes('status'));
+  // Try fetching statuses with minimal fields
+  let statusesResult = null;
+  let statusesError = null;
+  try {
+    const d = await gql(`{ statuses { id name color } }`);
+    statusesResult = d.statuses;
+  } catch (e) {
+    statusesError = e.message;
+  }
 
-  return NextResponse.json({ allQueryFields: fields, statusFields });
+  // Also try nodes pattern
+  let statusesNodes = null;
+  let nodesError = null;
+  try {
+    const d = await gql(`{ statuses { nodes { id name color } } }`);
+    statusesNodes = d.statuses;
+  } catch (e) {
+    nodesError = e.message;
+  }
+
+  return NextResponse.json({ statusesField, statusesResult, statusesError, statusesNodes, nodesError });
 }
