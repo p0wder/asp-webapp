@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useUser, UserButton } from '@clerk/nextjs';
 import ThemeToggle from '@/components/ThemeToggle';
 import CartIndicator from '@/components/CartIndicator';
 
@@ -93,7 +93,8 @@ export default function Header() {
           >
             Get a Quote
           </Link>
-          <CartIndicator />
+          {isAdmin && <CartIndicator />}
+          {user && <UserButton afterSignOutUrl="/" />}
           <ThemeToggle />
         </nav>
 
@@ -188,6 +189,18 @@ export default function Header() {
             <span className="font-medium" style={{ color: 'var(--foreground)' }}>Theme</span>
             <ThemeToggle />
           </div>
+          {isAdmin && (
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span className="font-medium" style={{ color: 'var(--foreground)' }}>Cart</span>
+              <CartIndicator />
+            </div>
+          )}
+          {user && (
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span className="font-medium" style={{ color: 'var(--foreground)' }}>Account</span>
+              <UserButton afterSignOutUrl="/" />
+            </div>
+          )}
         </nav>
       )}
     </header>
