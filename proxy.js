@@ -6,8 +6,8 @@ const isProtectedCustomerRoute = createRouteMatcher(['/my-orders(.*)']);
 
 // Admin routes protected by Clerk with role: admin
 const isAdminRoute = createRouteMatcher([
-  '/orders(.*)',
-  '/quotes(.*)',
+  '/purchasing(.*)',
+  '/pipeline(.*)',
   '/api/ready-to-order(.*)',
   '/api/quotes(.*)',
   '/api/place-order(.*)',

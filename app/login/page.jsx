@@ -7,7 +7,7 @@ export default async function LoginPage({ searchParams }) {
   const { userId } = await auth();
   if (userId) {
     const user = await currentUser();
-    if (user?.publicMetadata?.role === 'admin') redirect('/orders');
+    if (user?.publicMetadata?.role === 'admin') redirect('/purchasing');
     redirect('/my-orders');
   }
 

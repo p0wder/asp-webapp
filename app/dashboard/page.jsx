@@ -6,6 +6,6 @@ export default async function DashboardPage() {
   if (!userId) redirect('/login');
 
   const user = await currentUser();
-  if (user?.publicMetadata?.role === 'admin') redirect('/orders');
+  if (user?.publicMetadata?.role === 'admin') redirect('/purchasing');
   redirect('/');
 }
