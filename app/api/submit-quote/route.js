@@ -23,6 +23,7 @@ import {
 } from '@/lib/printavo';
 import { calcUnitCost } from '@/lib/pricing';
 import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
+import { generateStatusToken } from '@/lib/orderStatus';
 
 // Printavo status ID for "Quote"
 const QUOTE_STATUS_ID = '256246';
@@ -293,10 +294,23 @@ export async function POST(request) {
 
     }
 
+    // Generate a signed status URL so the customer can track their order
+    // without creating an account. STATUS_TOKEN_SECRET must be set in env vars.
+    let statusUrl = null;
+    const statusSecret = process.env.STATUS_TOKEN_SECRET;
+    if (statusSecret) {
+      const token = generateStatusToken(quote.id, statusSecret);
+      statusUrl = `/order-status?id=${encodeURIComponent(quote.id)}&token=${token}`;
+    }
+
+    console.log('[submit-quote] quote created', { id: quote.id, visualId: quote.visualId });
+
     return NextResponse.json({
       success: true,
-      quoteId: quote.visualId,
-      quoteUrl: quote.publicUrl,
+      quoteId: quote.visualId,       // human-readable (e.g. "Q-1042")
+      printavoId: quote.id,          // node ID used for API lookups
+      quoteUrl: quote.publicUrl,     // Printavo-hosted quote URL
+      statusUrl,                     // /order-status?id=…&token=… (null if secret not set)
     });
   } catch (error) {
     console.error('Error submitting quote to Printavo:', error);

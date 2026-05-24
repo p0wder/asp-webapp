@@ -151,6 +151,13 @@ function LoginForm() {
           Sign in with Google
         </button>
         */}
+
+        <p className="mt-6 text-center text-xs" style={{ color: 'var(--muted)' }}>
+          Not an admin?{' '}
+          <a href="/account/login" style={{ color: '#00FF66', textDecoration: 'none', fontWeight: 600 }}>
+            Track your order →
+          </a>
+        </p>
       </div>
     </div>
   );
