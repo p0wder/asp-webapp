@@ -1198,7 +1198,7 @@ export default function OrdersPage() {
             🛒 <span className="font-bold">{cartTotals.itemCount}</span> item{cartTotals.itemCount === 1 ? '' : 's'} in cart
           </span>
           <Link
-            href="/orders/cart"
+            href="/purchasing/cart"
             className="px-3 py-1 rounded-md text-xs font-semibold"
             style={{ background: 'var(--accent)', color: '#fff' }}
           >
