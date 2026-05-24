@@ -8,16 +8,21 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Pull statuses from both quotes and invoices (last 100 each)
-  const [quotesData, invoicesData] = await Promise.all([
-    gql(`{ quotes(first: 100) { nodes { status { id name color } } } }`),
-    gql(`{ invoices(first: 100) { nodes { status { id name color } } } }`).catch(() => ({ invoices: { nodes: [] } })),
-  ]);
+  // Introspect root query fields to find status-related queries
+  const introData = await gql(`{
+    __schema {
+      queryType {
+        fields {
+          name
+        }
+      }
+    }
+  }`);
 
-  const seen = new Map();
-  for (const node of [...(quotesData.quotes?.nodes || []), ...(invoicesData.invoices?.nodes || [])]) {
-    if (node.status?.id) seen.set(node.status.id, node.status);
-  }
+  const fields = introData.__schema?.queryType?.fields?.map(f => f.name) || [];
 
-  return NextResponse.json([...seen.values()].sort((a, b) => a.name.localeCompare(b.name)));
+  // Try any field that looks status-related
+  const statusFields = fields.filter(f => f.toLowerCase().includes('status'));
+
+  return NextResponse.json({ allQueryFields: fields, statusFields });
 }
