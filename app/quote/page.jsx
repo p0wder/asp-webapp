@@ -262,7 +262,20 @@ export default function QuoteForm() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) { setSubmitError(json.error || "Something went wrong."); return; }
-      setQuoteData({ quoteId: json.quoteId || null, quoteUrl: json.quoteUrl || null, statusUrl: json.statusUrl || null, email: data.email });
+      setQuoteData({
+        quoteId: json.quoteId || null,
+        quoteUrl: json.quoteUrl || null,
+        statusUrl: json.statusUrl || null,
+        email: data.email,
+        summary: {
+          garments: selectedGarments,
+          shirtQuality: SHIRT_QUALITIES.find((q) => q.itemNumber === data.shirtQuality)?.label || data.shirtQuality,
+          qty: data.qty,
+          inkColors: data.inkColors,
+          artworkCount: uploadedFiles.filter((f) => f.url).length,
+          estimate: liveEstimate,
+        },
+      });
     } catch {
       setSubmitError("Network error — please try again.");
     }
@@ -295,6 +308,70 @@ export default function QuoteForm() {
               Quote <strong style={{ color: 'var(--foreground)' }}>#{quoteData.quoteId}</strong> has been received.
             </p>
           )}
+
+          {/* Order summary */}
+          {quoteData.summary && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem', marginBottom: '1rem', textAlign: 'left' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', margin: '0 0 0.75rem' }}>Order summary</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Garments</span>
+                  <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{quoteData.summary.garments.join(', ') || '—'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Style</span>
+                  <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{quoteData.summary.shirtQuality}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Quantity</span>
+                  <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{quoteData.summary.qty}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Ink colors</span>
+                  <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{quoteData.summary.inkColors}</span>
+                </div>
+                {quoteData.summary.artworkCount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Artwork files</span>
+                    <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{quoteData.summary.artworkCount} uploaded</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Price estimate */}
+          {quoteData.summary?.estimate && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: 12, padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+              <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', margin: '0 0 0.75rem' }}>Estimated price</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {quoteData.summary.estimate.hasGarmentCost && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
+                    <span>Garment ({quoteData.summary.estimate.qty} × ${quoteData.summary.estimate.garmentCost.toFixed(2)})</span>
+                    <span>${(quoteData.summary.estimate.garmentCost * quoteData.summary.estimate.qty).toFixed(2)}</span>
+                  </div>
+                )}
+                {quoteData.summary.estimate.decorationCost != null && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
+                    <span>Decoration ({quoteData.summary.estimate.qty} × ${quoteData.summary.estimate.decorationCost.toFixed(2)})</span>
+                    <span>${(quoteData.summary.estimate.decorationCost * quoteData.summary.estimate.qty).toFixed(2)}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 5, marginTop: 2 }}>
+                  <span>Subtotal</span><span>${quoteData.summary.estimate.subtotal.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
+                  <span>Est. sales tax (7.5%)</span><span>${quoteData.summary.estimate.salesTax.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700, color: 'var(--foreground)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 2 }}>
+                  <span>Estimated total</span>
+                  <span style={{ color: 'var(--accent)' }}>${quoteData.summary.estimate.totalPrice.toFixed(2)}</span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 0', opacity: 0.7 }}>Estimate only — final price confirmed after review.</p>
+              </div>
+            </div>
+          )}
+
           {/* What happens next */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.5rem', marginBottom: '1.5rem', textAlign: 'left' }}>
             <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', margin: '0 0 1rem' }}>What happens next</p>
@@ -679,38 +756,6 @@ export default function QuoteForm() {
                 </div>
               </div>
             </div>
-
-            {/* Price estimate */}
-            {liveEstimate && (
-              <div style={{ background: "var(--background)", border: "1px solid var(--accent)", borderRadius: 10, padding: "1rem 1.25rem", marginBottom: 16 }}>
-                <p style={{ ...sectionLabel, margin: "0 0 0.6rem", color: "var(--accent)" }}>Estimated price</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {liveEstimate.hasGarmentCost && (
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
-                      <span>Garment ({liveEstimate.qty} × ${liveEstimate.garmentCost.toFixed(2)})</span>
-                      <span>${(liveEstimate.garmentCost * liveEstimate.qty).toFixed(2)}</span>
-                    </div>
-                  )}
-                  {liveEstimate.decorationCost != null && (
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
-                      <span>Decoration ({liveEstimate.qty} × ${liveEstimate.decorationCost.toFixed(2)})</span>
-                      <span>${(liveEstimate.decorationCost * liveEstimate.qty).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)", borderTop: "1px solid var(--border)", paddingTop: 5, marginTop: 2 }}>
-                    <span>Subtotal</span><span>${liveEstimate.subtotal.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
-                    <span>Est. Sales tax (7.5%)</span><span>${liveEstimate.salesTax.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, color: "var(--foreground)", borderTop: "1px solid var(--border)", paddingTop: 6, marginTop: 2 }}>
-                    <span>Estimated total</span>
-                    <span style={{ color: "var(--accent)" }}>${liveEstimate.totalPrice.toFixed(2)}</span>
-                  </div>
-                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0", opacity: 0.7 }}>Estimate only — final price confirmed after review.</p>
-                </div>
-              </div>
-            )}
 
             {/* Notes */}
             <div style={{ marginBottom: 16 }}>
