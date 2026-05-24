@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { put, list } from '@vercel/blob';
-import { setQuoteStatus } from '@/lib/printavo';
+import { setQuoteStatus, ART_APPROVED_STATUS_ID, DESIGN_NEEDED_STATUS_ID } from '@/lib/printavo';
 import { verifyProofToken } from '@/lib/orderStatus';
 
 export async function POST(request) {
@@ -43,18 +43,12 @@ export async function POST(request) {
     { access: 'public', addRandomSuffix: false },
   );
 
-  // Update Printavo status — best-effort, requires PROOF_APPROVED_STATUS_ID /
-  // PROOF_CHANGES_STATUS_ID env vars to be set in Vercel. Skipped silently if absent.
-  const targetStatusId = decision === 'approved'
-    ? process.env.PROOF_APPROVED_STATUS_ID
-    : process.env.PROOF_CHANGES_STATUS_ID;
-
-  if (targetStatusId) {
-    try {
-      await setQuoteStatus(invoiceId, targetStatusId);
-    } catch (err) {
-      console.error('[proof-decision] Printavo status update failed:', err.message);
-    }
+  // Update Printavo status — best-effort, non-fatal
+  const targetStatusId = decision === 'approved' ? ART_APPROVED_STATUS_ID : DESIGN_NEEDED_STATUS_ID;
+  try {
+    await setQuoteStatus(invoiceId, targetStatusId);
+  } catch (err) {
+    console.error('[proof-decision] Printavo status update failed:', err.message);
   }
 
   return NextResponse.json({ success: true, decision });

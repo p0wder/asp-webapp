@@ -15,12 +15,19 @@ const TIMELINE_STEPS = [
 ];
 
 const STATUS_STEP_MAP = {
-  'quote': 0, 'quote received': 0, 'new': 0,
-  'under review': 1, 'reviewing': 1,
-  'proof ready': 2, 'proof sent': 2,
-  'approved': 3, 'proof approved': 3,
-  'in production': 4, 'production': 4, 'printing': 4,
-  'complete': 5, 'shipped': 5, 'delivered': 5, 'ready': 5,
+  // Step 0 — Quote Received
+  'quote': 0, 'design needed': 0, 'urgent follow up on quote': 0, 'quote follow up complete': 0,
+  // Step 1 — Under Review
+  'quote approval sent': 1, 'quote approved': 1, 'incomplete action needed': 1, 'order on hold': 1,
+  // Step 2 — Proof Ready
+  'art approval sent': 2,
+  // Step 3 — Approved
+  'art approved': 3, 'ready to order': 3,
+  // Step 4 — In Production
+  'goods in transit': 4, 'ready for production': 4, 'in production': 4, 'embroidery in production': 4,
+  // Step 5 — Complete
+  'completed': 5, 'order ready for pickup': 5, 'order shipped': 5, 'complete': 5,
+  'feedback request': 5, 'need it again': 5,
 };
 
 function resolveStep(statusName) {
