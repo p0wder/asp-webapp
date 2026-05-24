@@ -24,7 +24,7 @@ const themeInitScript = `
 
 export default function RootLayout({ children }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider signInUrl="/login" signUpUrl="/login" afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard">
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
