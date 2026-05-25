@@ -47,6 +47,15 @@ export default function Header() {
               Pipeline
             </Link>
           )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/marketing"
+              className="font-medium nav-link-green transition-colors"
+              style={{ color: 'var(--foreground)' }}
+            >
+              Marketing
+            </Link>
+          )}
           {user && !isAdmin && (
             <Link
               href="/my-orders"
@@ -131,6 +140,16 @@ export default function Header() {
               onClick={() => setMenuOpen(false)}
             >
               Pipeline
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/marketing"
+              className="font-medium hover:opacity-75 transition-opacity"
+              style={{ color: 'var(--foreground)' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Marketing
             </Link>
           )}
           {user && !isAdmin && (
