@@ -5,7 +5,7 @@ import { portfolioImages } from '@/lib/portfolioImages';
 // ─── Static content ──────────────────────────────────────────────────────────
 
 const STATS = [
-  { value: 'Hundreds', label: 'of Orders Delivered' },
+  { value: '1000+', label: 'Orders Completed' },
   { value: '10+', label: 'Years in Business' },
   { value: '2 Weeks', label: 'Standard Turnaround' },
   { value: '5-Star', label: 'Google Rated' },
