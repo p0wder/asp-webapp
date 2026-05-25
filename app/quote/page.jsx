@@ -143,6 +143,9 @@ export default function QuoteForm() {
   const [quoteData, setQuoteData] = useState(null); // { quoteId, quoteUrl } from Printavo
   const [garmentPricing, setGarmentPricing] = useState({});
   const [sizeBreakdown, setSizeBreakdown] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoStatus, setPromoStatus] = useState(null); // null | { valid, message, discountAmount }
+  const [promoChecking, setPromoChecking] = useState(false);
 
   const {
     register,
@@ -170,12 +173,21 @@ export default function QuoteForm() {
       .catch(() => {});
   }, []);
 
+  // Pre-fill promo code from ?promo= URL param
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const p = params.get("promo");
+    if (p) setPromoCode(p.toUpperCase());
+  }, []);
+
   // Live estimate
   const watchedQty = useWatch({ control, name: "qty" });
   const watchedInkColors = useWatch({ control, name: "inkColors" });
   const watchedShirtQuality = useWatch({ control, name: "shirtQuality" });
   const watchedLocations = useWatch({ control, name: "locations" });
   const watchedSizes = useWatch({ control, name: undefined });
+  const watchedEmail = useWatch({ control, name: "email" });
 
   const liveEstimate = (() => {
     const qty = parseInt(watchedQty) || 0;
@@ -188,13 +200,42 @@ export default function QuoteForm() {
     if (garmentCost == null && decorationCost == null) return null;
     const unitPrice = (garmentCost ?? 0) + (decorationCost ?? 0);
     const subtotal = unitPrice * qty;
-    const salesTax = subtotal * 0.075;
+    const promoDiscount = (promoStatus?.valid && promoStatus?.discountAmount) ? promoStatus.discountAmount : 0;
+    const discountedSubtotal = Math.max(0, subtotal - promoDiscount);
+    const salesTax = discountedSubtotal * 0.075;
     return {
       qty, garmentCost, decorationCost, unitPrice,
-      subtotal, salesTax, totalPrice: subtotal + salesTax,
+      subtotal, promoDiscount, discountedSubtotal,
+      salesTax, totalPrice: discountedSubtotal + salesTax,
       hasGarmentCost: garmentCost != null,
     };
   })();
+
+  // Debounced promo code validation (must come after liveEstimate is declared)
+  useEffect(() => {
+    if (!promoCode.trim()) {
+      setPromoStatus(null);
+      return;
+    }
+    const subtotal = liveEstimate?.subtotal ?? 0;
+    setPromoChecking(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/validate-promo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: promoCode.trim(), subtotal, email: watchedEmail || null }),
+        });
+        const data = await res.json();
+        setPromoStatus(data);
+      } catch {
+        setPromoStatus({ valid: false, message: "Could not validate code" });
+      } finally {
+        setPromoChecking(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [promoCode, liveEstimate?.subtotal, watchedEmail]);
 
   // File upload
   const handleFiles = useCallback(async (files) => {
@@ -258,6 +299,7 @@ export default function QuoteForm() {
           garmentTypes: selectedGarments,
           locations: locsEnabled ? data.locations : [],
           locsEnabled, artworkUrls,
+          promoCode: promoStatus?.valid && promoCode.trim() ? promoCode.trim() : null,
         }),
       });
       const json = await res.json();
@@ -274,6 +316,9 @@ export default function QuoteForm() {
           inkColors: data.inkColors,
           artworkCount: uploadedFiles.filter((f) => f.url).length,
           estimate: liveEstimate,
+          appliedPromo: promoStatus?.valid
+            ? { code: promoCode.trim(), message: promoStatus.message, discountAmount: promoStatus.discountAmount }
+            : null,
         },
       });
     } catch {
@@ -360,6 +405,12 @@ export default function QuoteForm() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 5, marginTop: 2 }}>
                   <span>Subtotal</span><span>${quoteData.summary.estimate.subtotal.toFixed(2)}</span>
                 </div>
+                {quoteData.summary.appliedPromo?.discountAmount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#00FF66' }}>
+                    <span>Discount ({quoteData.summary.appliedPromo.message || quoteData.summary.appliedPromo.code})</span>
+                    <span>−${quoteData.summary.appliedPromo.discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
                   <span>Est. sales tax (7.5%)</span><span>${quoteData.summary.estimate.salesTax.toFixed(2)}</span>
                 </div>
@@ -757,6 +808,73 @@ export default function QuoteForm() {
               </div>
             </div>
 
+            {/* Price estimate */}
+            {liveEstimate && (
+              <div style={{ background: "var(--background)", border: "1px solid var(--accent)", borderRadius: 10, padding: "1rem 1.25rem", marginBottom: 16 }}>
+                <p style={{ ...sectionLabel, margin: "0 0 0.6rem", color: "var(--accent)" }}>Estimated price</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {liveEstimate.hasGarmentCost && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
+                      <span>Garment ({liveEstimate.qty} × ${liveEstimate.garmentCost.toFixed(2)})</span>
+                      <span>${(liveEstimate.garmentCost * liveEstimate.qty).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {liveEstimate.decorationCost != null && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
+                      <span>Decoration ({liveEstimate.qty} × ${liveEstimate.decorationCost.toFixed(2)})</span>
+                      <span>${(liveEstimate.decorationCost * liveEstimate.qty).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)", borderTop: "1px solid var(--border)", paddingTop: 5, marginTop: 2 }}>
+                    <span>Subtotal</span><span>${liveEstimate.subtotal.toFixed(2)}</span>
+                  </div>
+                  {liveEstimate.promoDiscount > 0 && promoStatus?.message && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#00FF66" }}>
+                      <span>Discount ({promoStatus.message.split(" — ")[0]})</span>
+                      <span>−${liveEstimate.promoDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
+                    <span>Est. Sales tax (7.5%)</span><span>${liveEstimate.salesTax.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, color: "var(--foreground)", borderTop: "1px solid var(--border)", paddingTop: 6, marginTop: 2 }}>
+                    <span>Estimated total</span>
+                    <span style={{ color: "var(--accent)" }}>${liveEstimate.totalPrice.toFixed(2)}</span>
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0", opacity: 0.7 }}>Estimate only — final price confirmed after review.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Promo code */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={fieldLabel}>Promo code <span style={{ fontWeight: 400, textTransform: "none", opacity: 0.6 }}>— optional</span></label>
+              <div style={{ position: "relative" }}>
+                <input
+                  style={{ ...inputBase, paddingRight: promoCode ? 36 : 12 }}
+                  placeholder="e.g. SUMMER25"
+                  value={promoCode}
+                  onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoStatus(null); }}
+                />
+                {promoCode && (
+                  <button
+                    type="button"
+                    onClick={() => { setPromoCode(""); setPromoStatus(null); }}
+                    style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "var(--muted)", padding: 0, lineHeight: 1 }}
+                  >×</button>
+                )}
+              </div>
+              {promoChecking && <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Checking…</p>}
+              {!promoChecking && promoStatus?.valid && (
+                <p style={{ fontSize: 11, color: "#00FF66", marginTop: 4 }}>
+                  ✓ {promoStatus.message}{promoStatus.isPersonalized ? " · Personalized offer" : ""}
+                </p>
+              )}
+              {!promoChecking && promoStatus && !promoStatus.valid && (
+                <p style={{ fontSize: 11, color: "#ff4444", marginTop: 4 }}>{promoStatus.message}</p>
+              )}
+            </div>
+
             {/* Notes */}
             <div style={{ marginBottom: 16 }}>
               <label style={fieldLabel}>Notes / special requests <span style={{ fontWeight: 400, textTransform: "none", opacity: 0.6 }}>— optional</span></label>
@@ -777,7 +895,7 @@ export default function QuoteForm() {
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" style={btnSecondary} onClick={goBack}>← Back</button>
               <button type="submit" disabled={isSubmitting} style={{ ...btnPrimary, flex: 1, opacity: isSubmitting ? 0.6 : 1, cursor: isSubmitting ? "not-allowed" : "pointer" }}>
-                {isSubmitting ? "Sending..." : "Submit Quote Request 🚀"}
+                {isSubmitting ? "Sending..." : "Submit 🚀"}
               </button>
             </div>
 
