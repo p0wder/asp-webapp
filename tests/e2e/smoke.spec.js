@@ -13,7 +13,7 @@ test.describe('Pay page', () => {
 
   test('shows amount when amount param is provided', async ({ page }) => {
     await page.goto('/pay?invoiceId=test-123&amount=25000');
-    await expect(page.getByText('$250.00')).toBeVisible();
+    await expect(page.getByText('$250.00').first()).toBeVisible();
   });
 
   test('pay success page renders confirmation', async ({ page }) => {

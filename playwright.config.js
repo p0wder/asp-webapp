@@ -21,22 +21,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        // Use pre-installed headless shell when the default Chromium is unavailable
-        ...(process.env.PLAYWRIGHT_BROWSERS_PATH
-          ? {}
-          : { executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' }),
-      },
+      use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'mobile',
-      use: {
-        ...devices['Pixel 5'],
-        ...(process.env.PLAYWRIGHT_BROWSERS_PATH
-          ? {}
-          : { executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' }),
-      },
+      use: { ...devices['Pixel 5'] },
     },
   ],
   // webServer is only used when testing against localhost (not a deployed URL)

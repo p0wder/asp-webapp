@@ -7,7 +7,7 @@ test.describe('Homepage', () => {
 
   test('renders hero heading and CTA', async ({ page }) => {
     await expect(page.getByRole('heading', { name: /Custom Apparel/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Get Your Free Quote/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Get Your Free Quote/i }).first()).toBeVisible();
   });
 
   test('CTA links to /quote', async ({ page }) => {
