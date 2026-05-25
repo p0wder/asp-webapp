@@ -895,7 +895,7 @@ export default function QuoteForm() {
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" style={btnSecondary} onClick={goBack}>← Back</button>
               <button type="submit" disabled={isSubmitting} style={{ ...btnPrimary, flex: 1, opacity: isSubmitting ? 0.6 : 1, cursor: isSubmitting ? "not-allowed" : "pointer" }}>
-                {isSubmitting ? "Sending..." : "Submit Quote Request 🚀"}
+                {isSubmitting ? "Sending..." : "Submit 🚀"}
               </button>
             </div>
 
