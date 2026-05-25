@@ -231,7 +231,7 @@ export default function PromoCodesPage() {
       <div style={card}>
         <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', margin: '0 0 1.25rem' }}>Create new promo code</h2>
         <form onSubmit={handleCreate} noValidate>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
             <div style={{ gridColumn: 'span 2' }}>
               <label style={label}>Code *</label>
               <input
