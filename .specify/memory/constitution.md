@@ -56,7 +56,10 @@ small leaf components rather than promoted up the tree.
 
 Custom middleware lives in `proxy.js` (this project's chosen filename); its
 `config.matcher` is the single source of truth for which routes are auth-gated
-at the edge.
+at the edge. `proxy.js` exports `proxy` (the `clerkMiddleware` instance) and
+`config`. A `middleware.js` file MUST NOT exist — this Next.js version uses
+`proxy.js` as the middleware entrypoint, and having both files causes a build
+conflict.
 
 **Rationale**: The App Router is the framework's supported direction; mixing
 routers fragments routing logic. Keeping client boundaries narrow preserves
