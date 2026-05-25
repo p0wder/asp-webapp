@@ -316,6 +316,9 @@ export default function QuoteForm() {
           inkColors: data.inkColors,
           artworkCount: uploadedFiles.filter((f) => f.url).length,
           estimate: liveEstimate,
+          appliedPromo: promoStatus?.valid
+            ? { code: promoCode.trim(), message: promoStatus.message, discountAmount: promoStatus.discountAmount }
+            : null,
         },
       });
     } catch {
@@ -402,6 +405,12 @@ export default function QuoteForm() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 5, marginTop: 2 }}>
                   <span>Subtotal</span><span>${quoteData.summary.estimate.subtotal.toFixed(2)}</span>
                 </div>
+                {quoteData.summary.appliedPromo?.discountAmount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#00FF66' }}>
+                    <span>Discount ({quoteData.summary.appliedPromo.message || quoteData.summary.appliedPromo.code})</span>
+                    <span>−${quoteData.summary.appliedPromo.discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
                   <span>Est. sales tax (7.5%)</span><span>${quoteData.summary.estimate.salesTax.toFixed(2)}</span>
                 </div>
