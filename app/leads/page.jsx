@@ -444,7 +444,7 @@ function LeadCard({ lead, onChange, onDelete }) {
       {/* Source link */}
       {lead.sourceUrl && (
         <a href={lead.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}>
-          View on Eventbrite →
+          View event →
         </a>
       )}
 
