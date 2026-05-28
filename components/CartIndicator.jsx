@@ -10,7 +10,7 @@ export default function CartIndicator() {
 
   return (
     <Link
-      href="/orders/cart"
+      href="/purchasing/cart"
       className="relative inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors hover:bg-black/5 dark:hover:bg-white/5"
       style={{ color: 'var(--foreground)' }}
       aria-label={`Cart (${itemCount} items)`}

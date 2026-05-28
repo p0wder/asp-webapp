@@ -263,7 +263,7 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabl
             setTimeout(() => setJustAdded(0), 2000);
           }
         }}
-        className="px-3 py-1 rounded-md text-xs font-semibold transition-opacity"
+        className="px-3 py-2 sm:py-1 rounded-md text-xs font-semibold transition-opacity"
         style={{
           background: disabled ? 'var(--surface)' : 'var(--accent)',
           color: disabled ? 'var(--muted)' : '#fff',
@@ -295,7 +295,7 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabl
     <button
       type="button"
       onClick={() => onRetry(lineItem.id)}
-      className="px-3 py-1 rounded-md text-xs font-semibold border border-red-500 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
+      className="px-3 py-2 sm:py-1 rounded-md text-xs font-semibold border border-red-500 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
       title={result?.error || 'Lookup failed'}
     >
       ⚠ Lookup failed — Retry
@@ -324,7 +324,7 @@ function PaidBadge({ paidInFull }) {
  * explaining the "entered / invoice qty" format. Sizes come from getRowSizes()
  * so each row shows only the sizes that apply to its product.
  */
-function SizeEditor({ rowSizes, getQty, onChange, status }) {
+function SizeEditor({ rowSizes, getQty, onChange, status, maxPairs = 4 }) {
   const { sizes, targetQty } = rowSizes;
   const sum = sizes.reduce((acc, s) => acc + getQty(s), 0);
 
@@ -339,9 +339,7 @@ function SizeEditor({ rowSizes, getQty, onChange, status }) {
     : status === 'under' ? '#ca8a04'
     : 'var(--muted)';
 
-  // Lay out as N (label, input) pairs per visual row — N = min(sizes, 4).
-  // The grid keeps labels & inputs vertically aligned across wrapped rows.
-  const pairsPerRow = Math.min(sizes.length, 4);
+  const pairsPerRow = Math.min(sizes.length, maxPairs);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -351,7 +349,6 @@ function SizeEditor({ rowSizes, getQty, onChange, status }) {
       >
         {sizes.map((s) => {
           const val = getQty(s);
-          const isPrefilled = val === s.prefillQty && val !== 0;
           return (
             <Fragment key={s.sizeName}>
               <span
@@ -365,12 +362,14 @@ function SizeEditor({ rowSizes, getQty, onChange, status }) {
                 min="0"
                 value={val}
                 onChange={(e) => onChange(s.sizeName, e.target.value)}
+                inputMode="numeric"
                 className="w-12 text-center rounded border px-1 py-0.5 text-xs font-medium focus:outline-none focus:ring-2"
                 style={{
-                  background: isPrefilled ? 'var(--surface)' : 'var(--background)',
+                  background: 'var(--surface)',
                   borderColor: 'var(--border)',
                   color: 'var(--foreground)',
                   '--tw-ring-color': 'var(--accent)',
+                  fontSize: '16px',
                 }}
               />
             </Fragment>
@@ -439,115 +438,152 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
     return { ...li, sizeAllocations };
   }
 
+  function getLineItemRenderProps(li) {
+    const classification = classifications?.get(li.id);
+    const rowSizes = getRowSizes(li, classification);
+    const qty = rowSizes.sizes.reduce((sum, s) => sum + getQtyForSize(li.id, s), 0);
+    const { unitPriceLabel, total: lineTotal } = getRowCost(
+      li, rowSizes, classification, (s) => getQtyForSize(li.id, s),
+    );
+    const status =
+      qty === 0 ? 'idle'
+      : qty < rowSizes.targetQty ? 'under'
+      : qty === rowSizes.targetQty ? 'ok'
+      : 'over';
+    // Only block add-to-cart when nothing's been allocated yet. Going under
+    // or over the invoice qty is allowed — the status indicator surfaces the
+    // mismatch but doesn't enforce it (users routinely buy extras as overrun).
+    const addDisabled = rowSizes.mode === 'ss' && qty === 0;
+    const addDisabledReason = addDisabled ? `Allocate at least 1 across the available sizes` : null;
+    return { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, effectiveLi: effectiveLineItem(li, rowSizes) };
+  }
+
   return (
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr style={{ borderBottom: '2px solid var(--border)' }}>
-            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Item #
-            </th>
-            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Color
-            </th>
-            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Description
-            </th>
-            <th className="text-left py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Sizes
-            </th>
-            <th className="text-center py-2 px-2 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Qty
-            </th>
-            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Unit Price
-            </th>
-            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Total
-            </th>
-            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Sourcing
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {allLineItems.map((li) => {
-            const classification = classifications?.get(li.id);
-            const rowSizes = getRowSizes(li, classification);
+    <>
+      {/* Mobile card list — hidden at sm+ */}
+      <div className="mt-3 flex flex-col gap-2 sm:hidden">
+        {allLineItems.map((li) => {
+          const { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, effectiveLi } = getLineItemRenderProps(li);
+          return (
+            <div
+              key={li.id}
+              className="rounded-lg border p-3 flex flex-col gap-2"
+              style={{ borderColor: 'var(--border)', background: 'var(--background)' }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-mono text-xs font-medium">{li.itemNumber || '—'}</span>
+                <SourcingCell
+                  lineItem={effectiveLi}
+                  result={classification}
+                  onAddToCart={onAddToCart}
+                  onRetry={onRetry}
+                  disabled={addDisabled}
+                  disabledReason={addDisabledReason}
+                />
+              </div>
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                {[li.color, li.description].filter(Boolean).join(' · ') || '—'}
+              </p>
+              <SizeEditor
+                rowSizes={rowSizes}
+                getQty={(s) => getQtyForSize(li.id, s)}
+                onChange={(sizeName, v) => handleSizeChange(li.id, sizeName, v)}
+                status={status}
+                maxPairs={3}
+              />
+              <div className="flex gap-4 text-xs">
+                <span>Qty: <span className="font-semibold">{qty || '—'}</span></span>
+                <span>Unit: {unitPriceLabel ?? '—'}</span>
+                <span>Total: <span className="font-semibold">{lineTotal != null ? formatCurrency(lineTotal) : '—'}</span></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-            const qty = rowSizes.sizes.reduce(
-              (sum, s) => sum + getQtyForSize(li.id, s),
-              0,
-            );
-            const { unitPriceLabel, total: lineTotal } = getRowCost(
-              li,
-              rowSizes,
-              classification,
-              (s) => getQtyForSize(li.id, s),
-            );
-
-            const status =
-              qty === 0 ? 'idle'
-              : qty < rowSizes.targetQty ? 'under'
-              : qty === rowSizes.targetQty ? 'ok'
-              : 'over';
-
-            // Only block add-to-cart when nothing's been allocated yet. Going under
-            // or over the invoice qty is allowed — the status indicator surfaces the
-            // mismatch but doesn't enforce it (users routinely buy extras as overrun).
-            const addDisabled = rowSizes.mode === 'ss' && qty === 0;
-            const addDisabledReason = addDisabled
-              ? `Allocate at least 1 across the available sizes`
-              : null;
-
-            return (
-              <tr
-                key={li.id}
-                style={{ borderBottom: '1px solid var(--border)' }}
-                className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-              >
-                <td className="py-2 pr-3 font-mono text-xs font-medium align-top">
-                  {li.itemNumber || '—'}
-                </td>
-                <td className="py-2 pr-3 text-xs align-top">
-                  {li.color || '—'}
-                </td>
-                <td className="py-2 pr-3 text-xs max-w-[200px] align-top">
-                  {li.description || '—'}
-                </td>
-                <td className="py-2 px-3 align-top">
-                  <SizeEditor
-                    rowSizes={rowSizes}
-                    getQty={(s) => getQtyForSize(li.id, s)}
-                    onChange={(sizeName, v) => handleSizeChange(li.id, sizeName, v)}
-                    status={status}
-                  />
-                </td>
-                <td className="py-2 px-2 text-center text-xs font-semibold align-top">
-                  {qty || '—'}
-                </td>
-                <td className="py-2 pl-3 text-right text-xs align-top">
-                  {unitPriceLabel ?? '—'}
-                </td>
-                <td className="py-2 pl-3 text-right text-xs font-semibold align-top">
-                  {lineTotal != null ? formatCurrency(lineTotal) : '—'}
-                </td>
-                <td className="py-2 pl-3 text-right text-xs align-top">
-                  <SourcingCell
-                    lineItem={effectiveLineItem(li, rowSizes)}
-                    result={classification}
-                    onAddToCart={onAddToCart}
-                    onRetry={onRetry}
-                    disabled={addDisabled}
-                    disabledReason={addDisabledReason}
-                  />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+      {/* Desktop table — hidden below sm */}
+      <div className="mt-3 overflow-x-auto hidden sm:block">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+              <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Item #
+              </th>
+              <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Color
+              </th>
+              <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Description
+              </th>
+              <th className="text-left py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Sizes
+              </th>
+              <th className="text-center py-2 px-2 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Qty
+              </th>
+              <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Unit Price
+              </th>
+              <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Total
+              </th>
+              <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Sourcing
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {allLineItems.map((li) => {
+              const { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, effectiveLi } = getLineItemRenderProps(li);
+              return (
+                <tr
+                  key={li.id}
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                  className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <td className="py-2 pr-3 font-mono text-xs font-medium align-top">
+                    {li.itemNumber || '—'}
+                  </td>
+                  <td className="py-2 pr-3 text-xs align-top">
+                    {li.color || '—'}
+                  </td>
+                  <td className="py-2 pr-3 text-xs max-w-[200px] align-top">
+                    {li.description || '—'}
+                  </td>
+                  <td className="py-2 px-3 align-top">
+                    <SizeEditor
+                      rowSizes={rowSizes}
+                      getQty={(s) => getQtyForSize(li.id, s)}
+                      onChange={(sizeName, v) => handleSizeChange(li.id, sizeName, v)}
+                      status={status}
+                    />
+                  </td>
+                  <td className="py-2 px-2 text-center text-xs font-semibold align-top">
+                    {qty || '—'}
+                  </td>
+                  <td className="py-2 pl-3 text-right text-xs align-top">
+                    {unitPriceLabel ?? '—'}
+                  </td>
+                  <td className="py-2 pl-3 text-right text-xs font-semibold align-top">
+                    {lineTotal != null ? formatCurrency(lineTotal) : '—'}
+                  </td>
+                  <td className="py-2 pl-3 text-right text-xs align-top">
+                    <SourcingCell
+                      lineItem={effectiveLi}
+                      result={classification}
+                      onAddToCart={onAddToCart}
+                      onRetry={onRetry}
+                      disabled={addDisabled}
+                      disabledReason={addDisabledReason}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -591,53 +627,86 @@ function PartialDrilldown({ summary }) {
   };
 
   return (
-    <div className="mt-2 overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr style={{ borderBottom: '2px solid var(--border)' }}>
-            <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Line
-            </th>
-            <th className="text-left py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Source
-            </th>
-            <th className="text-right py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Already Ordered
-            </th>
-            <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-              Still Needed
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((li) => (
-            <tr
-              key={li.sourceLineItemId}
-              style={{ borderBottom: '1px solid var(--border)' }}
-            >
-              <td className="py-2 pr-3 text-xs align-top">
-                <span className="font-mono font-medium">{li.sku || '—'}</span>
-                {li.description ? (
-                  <span style={{ color: 'var(--muted)' }}> · {li.description}</span>
-                ) : null}
-              </td>
-              <td className="py-2 px-3 text-xs align-top" style={{ color: 'var(--muted)' }}>
-                {sourceLabel(li.source)}
-              </td>
-              <td className="py-2 px-3 text-xs text-right align-top font-semibold">
-                {li.alreadyOrdered ?? 0}
-              </td>
-              <td
-                className="py-2 pl-3 text-xs text-right align-top font-semibold"
-                style={{ color: (li.stillNeeded || 0) > 0 ? '#ca8a04' : 'var(--muted)' }}
-              >
-                {li.stillNeeded ?? 0}
-              </td>
+    <>
+      {/* Mobile cards — hidden at sm+ */}
+      <div className="mt-2 flex flex-col gap-2 sm:hidden">
+        {rows.map((li) => (
+          <div
+            key={li.sourceLineItemId}
+            className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border p-2.5 text-xs"
+            style={{ borderColor: 'var(--border)', background: 'var(--background)' }}
+          >
+            <span>
+              <span className="font-mono font-medium">{li.sku || '—'}</span>
+              {li.description && (
+                <span style={{ color: 'var(--muted)' }}> · {li.description}</span>
+              )}
+            </span>
+            <span className="text-right" style={{ color: 'var(--muted)' }}>
+              {sourceLabel(li.source)}
+            </span>
+            <span style={{ color: 'var(--muted)' }}>
+              Ordered: <span className="font-semibold" style={{ color: 'var(--foreground)' }}>{li.alreadyOrdered ?? 0}</span>
+            </span>
+            <span className="text-right" style={{ color: 'var(--muted)' }}>
+              Needed: <span
+                className="font-semibold"
+                style={{ color: (li.stillNeeded || 0) > 0 ? '#ca8a04' : 'var(--foreground)' }}
+              >{li.stillNeeded ?? 0}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table — hidden below sm */}
+      <div className="mt-2 overflow-x-auto hidden sm:block">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+              <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Line
+              </th>
+              <th className="text-left py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Source
+              </th>
+              <th className="text-right py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Already Ordered
+              </th>
+              <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Still Needed
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((li) => (
+              <tr
+                key={li.sourceLineItemId}
+                style={{ borderBottom: '1px solid var(--border)' }}
+              >
+                <td className="py-2 pr-3 text-xs align-top">
+                  <span className="font-mono font-medium">{li.sku || '—'}</span>
+                  {li.description ? (
+                    <span style={{ color: 'var(--muted)' }}> · {li.description}</span>
+                  ) : null}
+                </td>
+                <td className="py-2 px-3 text-xs align-top" style={{ color: 'var(--muted)' }}>
+                  {sourceLabel(li.source)}
+                </td>
+                <td className="py-2 px-3 text-xs text-right align-top font-semibold">
+                  {li.alreadyOrdered ?? 0}
+                </td>
+                <td
+                  className="py-2 pl-3 text-xs text-right align-top font-semibold"
+                  style={{ color: (li.stillNeeded || 0) > 0 ? '#ca8a04' : 'var(--muted)' }}
+                >
+                  {li.stillNeeded ?? 0}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -1129,7 +1198,7 @@ export default function OrdersPage() {
             🛒 <span className="font-bold">{cartTotals.itemCount}</span> item{cartTotals.itemCount === 1 ? '' : 's'} in cart
           </span>
           <Link
-            href="/orders/cart"
+            href="/purchasing/cart"
             className="px-3 py-1 rounded-md text-xs font-semibold"
             style={{ background: 'var(--accent)', color: '#fff' }}
           >

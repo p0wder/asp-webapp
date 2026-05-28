@@ -1,6 +1,5 @@
+import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { lookupVariantsForLineItems } from '@/lib/ssActivewear';
 
 /**
@@ -12,8 +11,8 @@ import { lookupVariantsForLineItems } from '@/lib/ssActivewear';
  * Response: { success: true, results: [{ lineItemId, state, variants?, error? }] }
  */
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const isAdmin = await requireAdmin();
+  if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

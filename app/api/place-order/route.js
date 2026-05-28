@@ -1,6 +1,5 @@
+import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { placeOrderChain } from '@/lib/placeOrderChain';
 
 /**
@@ -27,8 +26,8 @@ import { placeOrderChain } from '@/lib/placeOrderChain';
  * Response shape: see `.specify/specs/002-printavo-order-notification/contracts/place-order.md`.
  */
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const isAdmin = await requireAdmin();
+  if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

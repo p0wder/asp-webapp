@@ -1,5 +1,4 @@
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan at
-`.specify/specs/002-printavo-order-notification/plan.md`.
+For project principles and governance, read the constitution at
+`.specify/memory/constitution.md`.
 <!-- SPECKIT END -->

@@ -13,9 +13,8 @@
  * or rate-limit pressure.
  */
 
+import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { listRecordsForInvoice } from '@/lib/orderAttribution';
 import { computePartialItemsSummary } from '@/lib/orderClassification';
 import { getSSOrdersByPO } from '@/lib/ssActivewear';
@@ -197,8 +196,8 @@ async function resolveInvoice(invoiceReq, flags) {
 export async function POST(request) {
   // Defence-in-depth auth per Constitution VII (proxy.js matcher is the
   // first layer; this is the second).
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const isAdmin = await requireAdmin();
+  if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

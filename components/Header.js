@@ -3,11 +3,14 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
+import { useUser, UserButton } from '@clerk/nextjs';
 import ThemeToggle from '@/components/ThemeToggle';
 import CartIndicator from '@/components/CartIndicator';
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user } = useUser();
+  const isAdmin = user?.publicMetadata?.role === 'admin';
 
   return (
     <header style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
@@ -26,13 +29,60 @@ export default function Header() {
 
         {/* Desktop Nav */}
         <nav className="hidden sm:flex items-center gap-8">
-          <Link
-            href="/orders"
-            className="font-medium nav-link-green transition-colors"
-            style={{ color: 'var(--foreground)' }}
-          >
-            Orders
-          </Link>
+          {isAdmin && (
+            <Link
+              href="/purchasing"
+              className="font-medium nav-link-green transition-colors"
+              style={{ color: 'var(--foreground)' }}
+            >
+              Purchasing
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/pipeline"
+              className="font-medium nav-link-green transition-colors"
+              style={{ color: 'var(--foreground)' }}
+            >
+              Pipeline
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/leads"
+              className="font-medium nav-link-green transition-colors"
+              style={{ color: 'var(--foreground)' }}
+            >
+              Leads
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/marketing"
+              className="font-medium nav-link-green transition-colors"
+              style={{ color: 'var(--foreground)' }}
+            >
+              Marketing
+            </Link>
+          )}
+          {user && !isAdmin && (
+            <Link
+              href="/my-orders"
+              className="font-medium nav-link-green transition-colors"
+              style={{ color: 'var(--foreground)' }}
+            >
+              My Orders
+            </Link>
+          )}
+          {!user && (
+            <Link
+              href="/login"
+              className="font-medium nav-link-green transition-colors"
+              style={{ color: 'var(--foreground)' }}
+            >
+              Sign In
+            </Link>
+          )}
           <Link
             href="/services"
             className="font-medium nav-link-green transition-colors"
@@ -61,7 +111,8 @@ export default function Header() {
           >
             Get a Quote
           </Link>
-          <CartIndicator />
+          {isAdmin && <CartIndicator />}
+          {user && <UserButton afterSignOutUrl="/" />}
           <ThemeToggle />
         </nav>
 
@@ -80,14 +131,66 @@ export default function Header() {
       {/* Mobile Dropdown Menu */}
       {menuOpen && (
         <nav className="sm:hidden px-6 py-4 flex flex-col gap-4" style={{ borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
-          <Link
-            href="/orders"
-            className="font-medium hover:opacity-75 transition-opacity"
-            style={{ color: 'var(--foreground)' }}
-            onClick={() => setMenuOpen(false)}
-          >
-            Orders
-          </Link>
+          {isAdmin && (
+            <Link
+              href="/purchasing"
+              className="font-medium hover:opacity-75 transition-opacity"
+              style={{ color: 'var(--foreground)' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Purchasing
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/pipeline"
+              className="font-medium hover:opacity-75 transition-opacity"
+              style={{ color: 'var(--foreground)' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Pipeline
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/leads"
+              className="font-medium hover:opacity-75 transition-opacity"
+              style={{ color: 'var(--foreground)' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Leads
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/marketing"
+              className="font-medium hover:opacity-75 transition-opacity"
+              style={{ color: 'var(--foreground)' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Marketing
+            </Link>
+          )}
+          {user && !isAdmin && (
+            <Link
+              href="/my-orders"
+              className="font-medium hover:opacity-75 transition-opacity"
+              style={{ color: 'var(--foreground)' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              My Orders
+            </Link>
+          )}
+          {!user && (
+            <Link
+              href="/login"
+              className="font-medium hover:opacity-75 transition-opacity"
+              style={{ color: 'var(--foreground)' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Sign In
+            </Link>
+          )}
           <Link
             href="/services"
             className="font-medium hover:opacity-75 transition-opacity"
@@ -120,6 +223,22 @@ export default function Header() {
           >
             Get a Quote
           </Link>
+          <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+            <span className="font-medium" style={{ color: 'var(--foreground)' }}>Theme</span>
+            <ThemeToggle />
+          </div>
+          {isAdmin && (
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span className="font-medium" style={{ color: 'var(--foreground)' }}>Cart</span>
+              <CartIndicator />
+            </div>
+          )}
+          {user && (
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span className="font-medium" style={{ color: 'var(--foreground)' }}>Account</span>
+              <UserButton afterSignOutUrl="/" />
+            </div>
+          )}
         </nav>
       )}
     </header>

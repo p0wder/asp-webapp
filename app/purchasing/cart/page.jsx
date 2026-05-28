@@ -23,7 +23,7 @@ export default function CartPage() {
           Add items from the orders page to build a consolidated SS Activewear order.
         </p>
         <Link
-          href="/orders"
+          href="/purchasing"
           className="inline-block px-5 py-2.5 rounded-lg text-sm font-semibold"
           style={{ background: 'var(--accent)', color: '#fff' }}
         >
@@ -45,7 +45,7 @@ export default function CartPage() {
           </p>
         </div>
         <Link
-          href="/orders"
+          href="/purchasing"
           className="text-sm font-medium hover:underline"
           style={{ color: 'var(--muted)' }}
         >
@@ -114,7 +114,7 @@ export default function CartPage() {
           Total: <span style={{ color: 'var(--accent)' }}>{formatCurrency(grandTotal)}</span>
         </div>
         <Link
-          href="/orders/checkout"
+          href="/purchasing/checkout"
           className="px-6 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90"
           style={{ background: 'var(--accent)', color: '#fff' }}
         >

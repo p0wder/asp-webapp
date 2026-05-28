@@ -6,8 +6,9 @@ import { NextResponse } from 'next/server';
 function isSameOrigin(request) {
   const origin = request.headers.get('origin');
   if (!origin) return false;
-  const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-  return origin === appUrl || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return true;
+  const host = request.headers.get('host');
+  return host ? origin === `https://${host}` : false;
 }
 
 import {
@@ -23,6 +24,9 @@ import {
 } from '@/lib/printavo';
 import { calcUnitCost } from '@/lib/pricing';
 import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
+import { generateStatusToken } from '@/lib/orderStatus';
+import { getCodeByString } from '@/lib/promoCodesStorage';
+import { validateCode, applyDiscount, incrementUse, discountLabel } from '@/lib/promoCodes';
 
 // Printavo status ID for "Quote"
 const QUOTE_STATUS_ID = '256246';
@@ -76,6 +80,7 @@ export async function POST(request) {
       shirtColor = null,
       billingAddress = null,
       shippingAddress = null,
+      promoCode: promoCodeStr = null,
     } = body;
 
     // ── Build job nickname ──────────────────────────────────────────────────
@@ -193,8 +198,36 @@ export async function POST(request) {
     // ── 5. Calculate decoration cost from pricing matrix ─────────────────────
     // Unit sell price = garment (with 115% markup) + decoration cost from matrix
     const decorationCost = calcUnitCost(parsedQty, parsedInkColors, locsEnabled, locations) ?? 0;
-    const resolvedUnitCost = parseFloat((garmentCostWithMarkup + decorationCost).toFixed(2));
-    const resolvedTotal = parseFloat((resolvedUnitCost * parsedQty).toFixed(2));
+    let resolvedUnitCost = parseFloat((garmentCostWithMarkup + decorationCost).toFixed(2));
+    let resolvedTotal = parseFloat((resolvedUnitCost * parsedQty).toFixed(2));
+
+    // ── 5a. Apply promo code discount (if provided and valid) ────────────────
+    let appliedPromo = null;
+    if (promoCodeStr) {
+      try {
+        const promoFound = await getCodeByString(promoCodeStr);
+        const promoReason = validateCode(promoFound, new Date().toISOString(), email);
+        if (!promoReason && promoFound) {
+          const discountAmount = applyDiscount(promoFound, resolvedTotal);
+          const discountPerUnit = parseFloat((discountAmount / parsedQty).toFixed(2));
+          resolvedUnitCost = parseFloat(Math.max(0, resolvedUnitCost - discountPerUnit).toFixed(2));
+          resolvedTotal = parseFloat(Math.max(0, resolvedTotal - discountAmount).toFixed(2));
+          appliedPromo = { code: promoFound.code, label: discountLabel(promoFound), discountAmount };
+          // Increment usage count — non-fatal if this fails
+          try {
+            const { saveCode } = await import('@/lib/promoCodesStorage');
+            await saveCode(incrementUse(promoFound));
+          } catch (err) {
+            console.warn('[submit-quote] could not increment promo use count:', err.message);
+          }
+          console.log(`[submit-quote] promo=${promoFound.code} discount=$${discountAmount} newTotal=$${resolvedTotal}`);
+        } else if (promoReason) {
+          console.warn(`[submit-quote] promo code "${promoCodeStr}" rejected: ${promoReason}`);
+        }
+      } catch (err) {
+        console.warn('[submit-quote] promo code lookup failed:', err.message);
+      }
+    }
 
     console.log(`[submit-quote] qty=${parsedQty} wholesale=$${wholesaleGarmentCost} garment(115%)=$${garmentCostWithMarkup} decoration=$${decorationCost} unitPrice=$${resolvedUnitCost} total=$${resolvedTotal}`);
 
@@ -293,10 +326,24 @@ export async function POST(request) {
 
     }
 
+    // Generate a signed status URL so the customer can track their order
+    // without creating an account. STATUS_TOKEN_SECRET must be set in env vars.
+    let statusUrl = null;
+    const statusSecret = process.env.STATUS_TOKEN_SECRET;
+    if (statusSecret) {
+      const token = generateStatusToken(quote.id, statusSecret);
+      statusUrl = `/order-status?id=${encodeURIComponent(quote.id)}&token=${token}`;
+    }
+
+    console.log('[submit-quote] quote created', { id: quote.id, visualId: quote.visualId });
+
     return NextResponse.json({
       success: true,
-      quoteId: quote.visualId,
-      quoteUrl: quote.publicUrl,
+      quoteId: quote.visualId,       // human-readable (e.g. "Q-1042")
+      printavoId: quote.id,          // node ID used for API lookups
+      quoteUrl: quote.publicUrl,     // Printavo-hosted quote URL
+      statusUrl,                     // /order-status?id=…&token=… (null if secret not set)
+      appliedPromo,                  // { code, label, discountAmount } or null
     });
   } catch (error) {
     console.error('Error submitting quote to Printavo:', error);

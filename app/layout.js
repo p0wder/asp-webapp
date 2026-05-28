@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { CartProvider } from "@/context/CartContext";
+import { ClerkProvider } from "@clerk/nextjs";
 
 export const metadata = {
   title: "Thread Giant - Custom Screen Printing",
@@ -23,6 +24,7 @@ const themeInitScript = `
 
 export default function RootLayout({ children }) {
   return (
+    <ClerkProvider signInUrl="/login" signUpUrl="/login" afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard">
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
@@ -39,5 +41,6 @@ export default function RootLayout({ children }) {
         </ThemeProvider>
       </body>
     </html>
+    </ClerkProvider>
   );
 }
