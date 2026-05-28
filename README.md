@@ -34,7 +34,7 @@ Create `.env.local` in the repo root (git-ignored). Required variables:
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key — used client-side on the payment page |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret — from Stripe dashboard webhook settings |
 | `STATUS_TOKEN_SECRET` | Random secret (min 32 chars) for signing customer order status and proof access tokens |
-| `TICKETMASTER_API_KEY` | Ticketmaster Discovery API key — free at developer.ticketmaster.com — used by the Lead Inbox scanner |
+| *(none required)* | Lead Inbox scanner uses RunSignup's public API — no key needed |
 | `EVENTBRITE_LOCATION` | Default search location for the weekly cron scan, e.g. `Charlotte, NC` or a zip code (can be overridden per-scan in the UI) |
 | `CRON_SECRET` | Random secret for authenticating Vercel cron requests to `/api/cron/refresh-leads` |
 

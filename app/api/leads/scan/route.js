@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
-import { scanEventsForLeads } from '@/lib/ticketmaster';
+import { scanEventsForLeads } from '@/lib/runsignup';
 import { geocodeLocation } from '@/lib/geocode';
 import { bulkInsertLeads } from '@/lib/leadsStorage';
 
