@@ -8,6 +8,7 @@ const isProtectedCustomerRoute = createRouteMatcher(['/my-orders(.*)']);
 const isAdminRoute = createRouteMatcher([
   '/purchasing(.*)',
   '/pipeline(.*)',
+  '/leads(.*)',
   '/dashboard/promo-codes(.*)',
   '/dashboard/marketing(.*)',
   '/api/ready-to-order(.*)',
@@ -22,6 +23,7 @@ const isAdminRoute = createRouteMatcher([
   '/api/proof-upload(.*)',
   '/api/promo-codes(.*)',
   '/api/printavo-customers(.*)',
+  '/api/leads(.*)',
 ]);
 
 export const proxy = clerkMiddleware(async (auth, request) => {
