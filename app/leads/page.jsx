@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // ─── Pure display helpers ──────────────────────────────────────────────────────
 
@@ -104,6 +104,162 @@ function CopyButton({ text, label = 'Copy' }) {
     }}>
       {copied ? 'Copied!' : label}
     </button>
+  );
+}
+
+// ─── Scan controls with location autocomplete ─────────────────────────────────
+
+function ScanControls({ onScanComplete }) {
+  const [location, setLocation] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanError, setScanError] = useState(null);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('leads:scanLocation');
+    if (saved) setLocation(saved);
+  }, []);
+
+  function handleLocationChange(val) {
+    setLocation(val);
+    setScanResult(null);
+    setScanError(null);
+    clearTimeout(debounceRef.current);
+
+    if (val.trim().length >= 2) {
+      setShowSuggestions(true);
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/leads/location-suggest?q=${encodeURIComponent(val)}`);
+          const data = await res.json();
+          setSuggestions(data.suggestions ?? []);
+        } catch {
+          setSuggestions([]);
+        }
+      }, 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }
+
+  function selectSuggestion(label) {
+    setLocation(label);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
+
+  async function scan() {
+    const loc = location.trim();
+    if (!loc) { setScanError('Enter a city or zip code first.'); return; }
+    localStorage.setItem('leads:scanLocation', loc);
+    setScanning(true);
+    setScanResult(null);
+    setScanError(null);
+    try {
+      const res = await fetch('/api/leads/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location: loc }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Scan failed');
+      setScanResult(data);
+      onScanComplete();
+    } catch (err) {
+      setScanError(err.message);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', fontSize: 13, padding: '9px 12px', borderRadius: 8,
+    border: '1px solid var(--border)', background: 'var(--background)',
+    color: 'var(--foreground)', fontFamily: 'inherit', outline: 'none',
+    boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* Location input + dropdown */}
+        <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
+          <input
+            value={location}
+            onChange={(e) => handleLocationChange(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="City or zip (e.g. Chicago, IL)"
+            style={inputStyle}
+          />
+
+          {showSuggestions && suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 8, marginTop: 4, overflow: 'hidden',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            }}>
+              {suggestions.map((s) => (
+                <div
+                  key={s.label}
+                  onMouseDown={() => selectSuggestion(s.label)}
+                  style={{
+                    padding: '9px 14px', fontSize: 13, cursor: 'pointer',
+                    color: 'var(--foreground)', borderBottom: '1px solid var(--border)',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--background)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {s.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={scan}
+          disabled={scanning}
+          style={{
+            padding: '9px 20px', fontSize: 13, borderRadius: 8, whiteSpace: 'nowrap',
+            cursor: scanning ? 'not-allowed' : 'pointer',
+            background: scanning ? 'var(--surface)' : '#00FF66',
+            color: scanning ? 'var(--muted)' : '#000',
+            border: scanning ? '1px solid var(--border)' : 'none',
+            fontWeight: 700, fontFamily: 'inherit',
+            opacity: scanning ? 0.7 : 1,
+          }}
+        >
+          {scanning ? 'Scanning Eventbrite…' : '⟳ Scan for Leads'}
+        </button>
+      </div>
+
+      {/* Feedback */}
+      {scanResult && (
+        <div style={{
+          marginTop: 10, padding: '8px 14px', borderRadius: 8,
+          background: 'rgba(0,255,102,0.07)', border: '1px solid #00FF6633',
+          fontSize: 13, color: '#00FF66', fontWeight: 600,
+        }}>
+          Scan complete near {scanResult.location} — {scanResult.found} events found, {scanResult.added} new lead{scanResult.added !== 1 ? 's' : ''} added.
+        </div>
+      )}
+      {scanError && (
+        <div style={{
+          marginTop: 10, padding: '8px 14px', borderRadius: 8,
+          background: 'rgba(255,68,68,0.07)', border: '1px solid #ff444433',
+          fontSize: 13, color: '#ff4444',
+        }}>
+          {scanError}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -287,11 +443,9 @@ function LeadCard({ lead, onChange, onDelete }) {
 
       {/* Source link */}
       {lead.sourceUrl && (
-        <div>
-          <a href={lead.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}>
-            View on Eventbrite →
-          </a>
-        </div>
+        <a href={lead.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}>
+          View on Eventbrite →
+        </a>
       )}
 
       {/* Quick status buttons */}
@@ -467,12 +621,9 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
-  const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState(null);
-  const [scanError, setScanError] = useState(null);
 
-  useEffect(() => {
-    fetch('/api/leads')
+  function fetchLeads() {
+    return fetch('/api/leads')
       .then((r) => {
         if (r.status === 401) throw new Error('Unauthorized — please log in as admin.');
         if (!r.ok) throw new Error('Failed to load leads.');
@@ -480,26 +631,9 @@ export default function LeadsPage() {
       })
       .then((data) => { setLeads(data.leads ?? []); setLoading(false); })
       .catch((e) => { setError(e.message); setLoading(false); });
-  }, []);
-
-  async function scan() {
-    setScanning(true);
-    setScanResult(null);
-    setScanError(null);
-    try {
-      const res = await fetch('/api/leads/scan', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Scan failed');
-      setScanResult(data);
-      const r2 = await fetch('/api/leads');
-      const d2 = await r2.json();
-      setLeads(d2.leads ?? []);
-    } catch (err) {
-      setScanError(err.message);
-    } finally {
-      setScanning(false);
-    }
   }
+
+  useEffect(() => { fetchLeads(); }, []);
 
   async function updateLead(id, patch) {
     const res = await fetch(`/api/leads/${id}`, {
@@ -524,45 +658,17 @@ export default function LeadsPage() {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1rem' }}>
       {/* Page header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--foreground)', margin: '0 0 4px' }}>
-            Lead Inbox
-          </h1>
-          <p style={{ fontSize: 14, color: 'var(--muted)', margin: 0 }}>
-            Potential clients from Eventbrite and manual entry. Scan weekly for new event organizers.
-          </p>
-        </div>
-        <button
-          onClick={scan}
-          disabled={scanning}
-          style={{
-            padding: '10px 20px', fontSize: 13, borderRadius: 20,
-            cursor: scanning ? 'not-allowed' : 'pointer',
-            background: scanning ? 'var(--surface)' : '#00FF66',
-            color: scanning ? 'var(--muted)' : '#000',
-            border: scanning ? '1px solid var(--border)' : 'none',
-            fontWeight: 700, fontFamily: 'inherit',
-            opacity: scanning ? 0.7 : 1, whiteSpace: 'nowrap',
-          }}
-        >
-          {scanning ? 'Scanning Eventbrite…' : '⟳ Scan for Leads'}
-        </button>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--foreground)', margin: '0 0 4px' }}>
+          Lead Inbox
+        </h1>
+        <p style={{ fontSize: 14, color: 'var(--muted)', margin: 0 }}>
+          Potential clients from Eventbrite and manual entry. Scan weekly to find new event organizers near you.
+        </p>
       </div>
 
-      {/* Scan feedback */}
-      {scanResult && (
-        <div style={{ ...card, marginBottom: '1rem', borderColor: '#00FF6644', background: 'rgba(0,255,102,0.05)', padding: '0.75rem 1.25rem' }}>
-          <span style={{ fontSize: 13, color: '#00FF66', fontWeight: 600 }}>
-            Scan complete — found {scanResult.found} events, {scanResult.added} new lead{scanResult.added !== 1 ? 's' : ''} added.
-          </span>
-        </div>
-      )}
-      {scanError && (
-        <div style={{ ...card, marginBottom: '1rem', borderColor: '#ff444444', background: 'rgba(255,68,68,0.05)', padding: '0.75rem 1.25rem' }}>
-          <span style={{ fontSize: 13, color: '#ff4444' }}>{scanError}</span>
-        </div>
-      )}
+      {/* Scan controls */}
+      <ScanControls onScanComplete={fetchLeads} />
 
       <AddLeadForm onAdded={(lead) => setLeads((prev) => [lead, ...prev])} />
 
@@ -604,7 +710,7 @@ export default function LeadsPage() {
           {visible.length === 0 ? (
             <div style={{ ...card, textAlign: 'center', color: 'var(--muted)', padding: '3rem' }}>
               {leads.length === 0
-                ? 'No leads yet. Click "Scan for Leads" to find event organizers on Eventbrite, or add one manually above.'
+                ? 'No leads yet. Enter a location above and click "Scan for Leads", or add one manually.'
                 : `No leads with status "${filter}".`}
             </div>
           ) : (
