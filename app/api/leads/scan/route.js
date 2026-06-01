@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { scanEventsForLeads } from '@/lib/runsignup';
+import { scanSchoolsForLeads } from '@/lib/nces';
 import { geocodeLocation } from '@/lib/geocode';
 import { bulkInsertLeads } from '@/lib/leadsStorage';
 
@@ -27,13 +28,33 @@ export async function POST(request) {
     );
   }
 
-  try {
-    const leads = await scanEventsForLeads({ lat: coords.lat, lng: coords.lng });
-    const added = await bulkInsertLeads(leads);
-    console.log(`[leads/scan] found=${leads.length} added=${added} location="${location}"`);
-    return NextResponse.json({ found: leads.length, added, location });
-  } catch (err) {
-    console.error('[leads/scan] error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  // Run all sources in parallel — a failure in one doesn't block the others.
+  const [eventsResult, schoolsResult] = await Promise.allSettled([
+    scanEventsForLeads({ lat: coords.lat, lng: coords.lng }),
+    coords.city && coords.stateCode
+      ? scanSchoolsForLeads({ city: coords.city, stateCode: coords.stateCode })
+      : Promise.resolve([]),
+  ]);
+
+  const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+  const schools = schoolsResult.status === 'fulfilled' ? schoolsResult.value : [];
+
+  if (eventsResult.status === 'rejected') {
+    console.error('[leads/scan] events source failed:', eventsResult.reason?.message);
   }
+  if (schoolsResult.status === 'rejected') {
+    console.error('[leads/scan] schools source failed:', schoolsResult.reason?.message);
+  }
+
+  const allLeads = [...events, ...schools];
+  const added = await bulkInsertLeads(allLeads);
+
+  console.log(`[leads/scan] location="${location}" events=${events.length} schools=${schools.length} added=${added}`);
+
+  return NextResponse.json({
+    found: allLeads.length,
+    added,
+    location,
+    breakdown: { events: events.length, schools: schools.length },
+  });
 }
