@@ -7,7 +7,13 @@ import { calcUnitCost } from "@/lib/pricing";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const GARMENT_TYPES = ["T-Shirt", "Hoodie", "Sweatshirt", "Long Sleeve", "Headwear"];
+const GARMENT_TYPES = [
+  { value: "T-Shirt",    icon: "👕" },
+  { value: "Hoodie",     icon: "🧥" },
+  { value: "Sweatshirt", icon: "🩱" },
+  { value: "Long Sleeve",icon: "👔" },
+  { value: "Headwear",   icon: "🧢" },
+];
 
 const APPAREL_QUALITIES = [
   { label: "Standard", itemNumber: "5000", description: "Gildan Heavy Cotton" },
@@ -94,21 +100,26 @@ function SelectCard({ selected, onClick, children, style = {} }) {
   );
 }
 
-function GarmentChip({ label, selected, onClick }) {
+function GarmentChip({ label, icon, selected, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
         border: `2px solid ${selected ? "var(--accent)" : "var(--border)"}`,
-        borderRadius: 8, padding: "10px 14px",
-        fontSize: 13, cursor: "pointer",
+        borderRadius: 10, padding: "10px 16px",
+        cursor: "pointer",
         background: selected ? "rgba(0,255,102,0.08)" : "var(--surface)",
         color: selected ? "var(--foreground)" : "var(--muted)",
         fontWeight: selected ? 600 : 400,
         transition: "all 0.15s", userSelect: "none", fontFamily: "inherit",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+        minWidth: 72,
       }}
-    >{label}</button>
+    >
+      <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
+      <span style={{ fontSize: 12 }}>{label}</span>
+    </button>
   );
 }
 
@@ -179,7 +190,6 @@ export default function QuoteForm() {
     return { qty, garmentCost, decorationCost, unitPrice, subtotal, hasGarmentCost: garmentCost != null };
   }
 
-  const builderEstimate = computeItemEstimate(builder);
 
   // ── Grand total across all added items ────────────────────────────────────
   const totalEstimate = (() => {
@@ -336,7 +346,7 @@ export default function QuoteForm() {
   const card = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.5rem", marginBottom: "1rem" };
   const sectionLabel = { fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", margin: "0 0 0.75rem" };
   const fieldLabel = { display: "block", fontSize: 12, fontWeight: 500, color: "var(--muted)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" };
-  const inputBase = { width: "100%", height: 42, padding: "10px 12px", fontSize: 14, background: "#F8F7F5", border: "1px solid var(--border)", borderRadius: 8, outline: "none", boxSizing: "border-box", color: "#1E0033", fontFamily: "inherit", transition: "border-color 0.15s", colorScheme: "light", appearance: "none", WebkitAppearance: "none" };
+  const inputBase = { width: "100%", height: 42, padding: "10px 12px", fontSize: 16, background: "#F8F7F5", border: "1px solid var(--border)", borderRadius: 8, outline: "none", boxSizing: "border-box", color: "#1E0033", fontFamily: "inherit", transition: "border-color 0.15s", colorScheme: "light", appearance: "none", WebkitAppearance: "none" };
   const inputErr = { ...inputBase, border: "1px solid #ff4444" };
   const twoCol = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14, marginBottom: 14 };
   const errMsg = { fontSize: 11, color: "#ff4444", marginTop: 4 };
@@ -562,12 +572,9 @@ export default function QuoteForm() {
                   <div style={{ marginBottom: "1rem" }}>
                     <p style={{ ...sectionLabel, marginBottom: 10 }}>
                       Your quote — {quoteItems.length} item{quoteItems.length !== 1 ? "s" : ""}
-                      {totalEstimate && <span style={{ color: "var(--accent)", marginLeft: 6 }}>· ~${totalEstimate.totalPrice.toFixed(2)} est.</span>}
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {quoteItems.map((item) => {
-                        const est = computeItemEstimate(item);
-                        return (
+                      {quoteItems.map((item) => (
                           <div key={item.id} style={{
                             background: "var(--surface)", border: "1px solid var(--border)",
                             borderRadius: 10, padding: "0.875rem 1rem",
@@ -582,7 +589,6 @@ export default function QuoteForm() {
                                 {item.qty} qty
                                 {item.shirtColor ? ` · ${item.shirtColor}` : ""}
                                 {itemShowsColors(item) ? ` · ${item.inkColors} ${item.decorationMethod === "Embroidery" ? "thread" : "ink"} color${item.inkColors > 1 ? "s" : ""}` : ""}
-                                {est ? <span style={{ color: "var(--accent)" }}> · ~${est.subtotal.toFixed(2)}</span> : null}
                               </div>
                             </div>
                             <button type="button" onClick={() => removeItem(item.id)}
@@ -590,8 +596,7 @@ export default function QuoteForm() {
                               Remove
                             </button>
                           </div>
-                        );
-                      })}
+                        ))}
                     </div>
                   </div>
                 )}
@@ -604,7 +609,7 @@ export default function QuoteForm() {
                   <p style={sectionLabel}>What are you decorating?</p>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
                     {GARMENT_TYPES.map((g) => (
-                      <GarmentChip key={g} label={g} selected={builder.garmentType === g} onClick={() => handleBuilderGarmentType(g)} />
+                      <GarmentChip key={g.value} label={g.value} icon={g.icon} selected={builder.garmentType === g.value} onClick={() => handleBuilderGarmentType(g.value)} />
                     ))}
                   </div>
 
@@ -674,14 +679,6 @@ export default function QuoteForm() {
                             }}>{n}</button>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Builder estimate */}
-                  {builderEstimate && (
-                    <div style={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 8, padding: "0.75rem 1rem", marginBottom: 16, fontSize: 13, color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
-                      <span>Estimated for this item</span>
-                      <span style={{ fontWeight: 600, color: "var(--foreground)" }}>~${builderEstimate.subtotal.toFixed(2)}</span>
                     </div>
                   )}
 
