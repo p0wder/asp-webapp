@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
 
-/**
- * Returns true if the request originates from the app's own frontend.
- */
 function isSameOrigin(request) {
   const origin = request.headers.get('origin');
   if (!origin) return false;
@@ -28,23 +25,14 @@ import { generateStatusToken } from '@/lib/orderStatus';
 import { getCodeByString } from '@/lib/promoCodesStorage';
 import { validateCode, applyDiscount, incrementUse, discountLabel } from '@/lib/promoCodes';
 
-// Printavo status ID for "Quote"
 const QUOTE_STATUS_ID = '256246';
-
-// Printavo category ID for Screen Printing (from original code)
 const SCREEN_PRINTING_CATEGORY_ID = '178403';
 
-// Map ink color count to pricingMatrixColumn ID (Screen Printing 2026 matrix)
 const SCREEN_PRINTING_COLUMN_IDS = {
-  1: '31382632',
-  2: '31382633',
-  3: '31382634',
-  4: '31382635',
-  5: '31382636',
-  6: '31382637',
+  1: '31382632', 2: '31382633', 3: '31382634',
+  4: '31382635', 5: '31382636', 6: '31382637',
 };
 
-// Map decorationMethod to typeOfWork ID
 const TYPE_OF_WORK_IDS = {
   'Screen Printing': '11802',
   'Embroidery': '11803',
@@ -52,7 +40,6 @@ const TYPE_OF_WORK_IDS = {
 };
 
 export async function POST(request) {
-  // ── Origin guard: only allow requests from this app's frontend ──────────
   if (!isSameOrigin(request)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -69,158 +56,142 @@ export async function POST(request) {
       dueDate,
       notes,
       jobName,
-      decorationMethod,
-      inkColors,
-      qty,
-      garmentTypes = [],
-      locations = [],
-      locsEnabled = false,
+      quoteItems = [],
       artworkUrls = [],
-      shirtQuality = '5000',
-      shirtColor = null,
       billingAddress = null,
       shippingAddress = null,
       promoCode: promoCodeStr = null,
     } = body;
 
-    // ── Build job nickname ──────────────────────────────────────────────────
-    const resolvedJobName =
-      jobName?.trim() ||
-      [garmentTypes.join(' + '), fname].filter(Boolean).join(' — ') ||
-      `${fname} ${lname}`.trim();
-
-    // ── Build production note (decoration method + print locations) ──────────
-    const locLines =
-      locsEnabled && locations.length > 0
-        ? locations
-            .map((l) => `• ${l.name} — ${l.colors} color${l.colors > 1 ? 's' : ''}${l.art ? ` (${l.art})` : ''}`)
-            .join('\n')
-        : null;
-
-    const productionNote =
-      [
-        decorationMethod ? `Decoration: ${decorationMethod}` : null,
-        locLines ? `Print Locations:\n${locLines}` : null,
-      ]
-        .filter(Boolean)
-        .join('\n\n') || null;
-
-    // ── Build customer note (notes + artwork list) ───────────────────────────
-    const artworkSection =
-      artworkUrls.length > 0
-        ? `Artwork (${artworkUrls.length} file${artworkUrls.length > 1 ? 's' : ''}):\n${artworkUrls
-            .map((f) => `• ${f.name}: ${f.url}`)
-            .join('\n')}`
-        : null;
-
-    const notesSection = notes
-      ? `━━━ NOTES / SPECIAL REQUESTS ━━━\n${notes}`
-      : null;
-
-    const customerNote = [notesSection, artworkSection].filter(Boolean).join('\n\n') || null;
-
-    // ── 1. Find existing contact by email, or create a new customer ──────────
-    let contactId = null;
-
-    try {
-      const existing = await findContactByEmail(email);
-      if (existing) {
-        contactId = existing.id;
-      }
-    } catch {
-      // Non-fatal — will fall through to create
+    if (!Array.isArray(quoteItems) || quoteItems.length === 0) {
+      return NextResponse.json({ error: 'At least one quote item is required' }, { status: 400 });
     }
 
+    // ── Build job nickname ────────────────────────────────────────────────────
+    const resolvedJobName =
+      jobName?.trim() ||
+      quoteItems.map((i) => i.garmentType).join(' + ') ||
+      `${fname} ${lname}`.trim();
+
+    // ── Build production note summarising all items ───────────────────────────
+    const itemLines = quoteItems.map((item, idx) => {
+      const colorLabel = item.decorationMethod === 'Embroidery' ? 'thread colors' : 'ink colors';
+      const colorPart = ['Screen Printing', 'DTF', 'Embroidery'].includes(item.decorationMethod) && item.inkColors
+        ? `, ${item.inkColors} ${colorLabel}`
+        : '';
+      const colorPiece = item.shirtColor ? `, ${item.shirtColor}` : '';
+      return `Item ${idx + 1}: ${item.garmentType} — ${item.decorationMethod}, qty ${item.qty}${colorPiece}${colorPart}`;
+    });
+    const productionNote = itemLines.join('\n') || null;
+
+    // ── Build customer note ───────────────────────────────────────────────────
+    const artworkSection =
+      artworkUrls.length > 0
+        ? `Artwork (${artworkUrls.length} file${artworkUrls.length > 1 ? 's' : ''}):\n${artworkUrls.map((f) => `• ${f.name}: ${f.url}`).join('\n')}`
+        : null;
+    const notesSection = notes ? `━━━ NOTES / SPECIAL REQUESTS ━━━\n${notes}` : null;
+    const customerNote = [notesSection, artworkSection].filter(Boolean).join('\n\n') || null;
+
+    // ── 1. Find or create customer ────────────────────────────────────────────
+    let contactId = null;
+    try {
+      const existing = await findContactByEmail(email);
+      if (existing) contactId = existing.id;
+    } catch {
+      // Non-fatal — fall through to create
+    }
     if (!contactId) {
       const newCustomer = await createCustomer({
-        firstName: fname,
-        lastName: lname || '',
-        email,
-        phone: phone || null,
-        companyName: company || null,
-        address: billingAddress || null,
+        firstName: fname, lastName: lname || '', email,
+        phone: phone || null, companyName: company || null, address: billingAddress || null,
       });
       contactId = newCustomer.primaryContact.id;
     }
 
-    // ── 2. Create the quote ──────────────────────────────────────────────────
+    // ── 2. Create the quote ───────────────────────────────────────────────────
     const toQuoteAddress = (addr) => addr ? {
-      address1: addr.address1 || null,
-      address2: addr.address2 || null,
-      city: addr.city || null,
-      stateIso: addr.state || null,
-      zipCode: addr.zip || null,
-      countryIso: 'US',
+      address1: addr.address1 || null, address2: addr.address2 || null,
+      city: addr.city || null, stateIso: addr.state || null,
+      zipCode: addr.zip || null, countryIso: 'US',
     } : null;
 
     const quote = await createQuote({
-      contactId,
-      nickname: resolvedJobName,
+      contactId, nickname: resolvedJobName,
       customerDueAt: dueDate || null,
       customerNote: customerNote || null,
       productionNote,
       billingAddress: toQuoteAddress(billingAddress),
       shippingAddress: toQuoteAddress(shippingAddress),
     });
-
     const quoteId = quote.id;
 
-    // ── 3. Set status to "Quote" ─────────────────────────────────────────────
+    // ── 3. Set status to "Quote" ──────────────────────────────────────────────
     try {
       await setQuoteStatus(quoteId, QUOTE_STATUS_ID);
     } catch (err) {
       console.warn('Could not set quote status:', err.message);
     }
 
-    // ── 4. Get garment wholesale cost from S&S Activewear ────────────────────
-    const parsedQty = parseInt(qty) || 1;
-    const parsedInkColors = parseInt(inkColors) || 1;
-    const styleNumber = shirtQuality || '5000';
+    // ── 4. Fetch S&S wholesale prices for each unique style (cached per-call) ─
+    const wholesalePriceByStyle = {};
 
-    let wholesaleGarmentCost = 0;
-    try {
-      const ssProducts = await fetchSSProductsByStyleNumbers(styleNumber);
-      // Use the lowest customerPrice across all variants for this style
-      const prices = ssProducts
-        .map((v) => v.customerPrice ?? v.piecePrice ?? null)
-        .filter((p) => p != null);
-      if (prices.length > 0) {
-        wholesaleGarmentCost = Math.min(...prices);
+    for (const item of quoteItems) {
+      const styleNumber = item.shirtQuality || '5000';
+      if (styleNumber in wholesalePriceByStyle) continue;
+      try {
+        const ssProducts = await fetchSSProductsByStyleNumbers(styleNumber);
+        const prices = ssProducts
+          .map((v) => v.customerPrice ?? v.piecePrice ?? null)
+          .filter((p) => p != null);
+        wholesalePriceByStyle[styleNumber] = prices.length > 0 ? Math.min(...prices) : 0;
+        console.log(`[submit-quote] style=${styleNumber} wholesale=$${wholesalePriceByStyle[styleNumber]}`);
+      } catch (err) {
+        console.warn(`[submit-quote] Could not fetch S&S price for ${styleNumber}:`, err.message);
+        wholesalePriceByStyle[styleNumber] = 0;
       }
-      console.log(`[submit-quote] style=${styleNumber} wholesaleGarmentCost=$${wholesaleGarmentCost}`);
-    } catch (err) {
-      console.warn(`[submit-quote] Could not fetch S&S garment cost for ${styleNumber}:`, err.message);
     }
 
-    // Apply 115% markup to the wholesale garment cost (matching Printavo's display)
-    const garmentCostWithMarkup = parseFloat((wholesaleGarmentCost * 1.15).toFixed(2));
+    // ── 5. Compute per-item pricing, accumulate grand total ───────────────────
+    const pricedItems = quoteItems.map((item) => {
+      const parsedQty = parseInt(item.qty) || 1;
+      const parsedInkColors = parseInt(item.inkColors) || 1;
+      const styleNumber = item.shirtQuality || '5000';
+      const wholesale = wholesalePriceByStyle[styleNumber] ?? 0;
+      const garmentCost = parseFloat((wholesale * 1.15).toFixed(2));
+      const canEstimate = item.decorationMethod === 'Screen Printing' || item.decorationMethod === 'DTF';
+      const decorationCost = canEstimate ? (calcUnitCost(parsedQty, parsedInkColors, false, []) ?? 0) : 0;
+      const unitCost = parseFloat((garmentCost + decorationCost).toFixed(2));
+      const itemTotal = parseFloat((unitCost * parsedQty).toFixed(2));
+      return { ...item, parsedQty, parsedInkColors, styleNumber, garmentCost, decorationCost, unitCost, itemTotal };
+    });
 
-    // ── 5. Calculate decoration cost from pricing matrix ─────────────────────
-    // Unit sell price = garment (with 115% markup) + decoration cost from matrix
-    const decorationCost = calcUnitCost(parsedQty, parsedInkColors, locsEnabled, locations) ?? 0;
-    let resolvedUnitCost = parseFloat((garmentCostWithMarkup + decorationCost).toFixed(2));
-    let resolvedTotal = parseFloat((resolvedUnitCost * parsedQty).toFixed(2));
+    let grandTotal = pricedItems.reduce((sum, ip) => sum + ip.itemTotal, 0);
+    grandTotal = parseFloat(grandTotal.toFixed(2));
 
-    // ── 5a. Apply promo code discount (if provided and valid) ────────────────
+    console.log(`[submit-quote] items=${quoteItems.length} grandTotal=$${grandTotal}`);
+
+    // ── 5a. Apply promo discount proportionally across items ──────────────────
     let appliedPromo = null;
     if (promoCodeStr) {
       try {
         const promoFound = await getCodeByString(promoCodeStr);
         const promoReason = validateCode(promoFound, new Date().toISOString(), email);
         if (!promoReason && promoFound) {
-          const discountAmount = applyDiscount(promoFound, resolvedTotal);
-          const discountPerUnit = parseFloat((discountAmount / parsedQty).toFixed(2));
-          resolvedUnitCost = parseFloat(Math.max(0, resolvedUnitCost - discountPerUnit).toFixed(2));
-          resolvedTotal = parseFloat(Math.max(0, resolvedTotal - discountAmount).toFixed(2));
+          const discountAmount = applyDiscount(promoFound, grandTotal);
+          const discountFraction = grandTotal > 0 ? discountAmount / grandTotal : 0;
+          for (const ip of pricedItems) {
+            const itemDiscount = ip.itemTotal * discountFraction;
+            ip.unitCost = parseFloat(Math.max(0, ip.unitCost - itemDiscount / ip.parsedQty).toFixed(2));
+          }
+          grandTotal = parseFloat(Math.max(0, grandTotal - discountAmount).toFixed(2));
           appliedPromo = { code: promoFound.code, label: discountLabel(promoFound), discountAmount };
-          // Increment usage count — non-fatal if this fails
           try {
             const { saveCode } = await import('@/lib/promoCodesStorage');
             await saveCode(incrementUse(promoFound));
           } catch (err) {
             console.warn('[submit-quote] could not increment promo use count:', err.message);
           }
-          console.log(`[submit-quote] promo=${promoFound.code} discount=$${discountAmount} newTotal=$${resolvedTotal}`);
+          console.log(`[submit-quote] promo=${promoFound.code} discount=$${discountAmount} newTotal=$${grandTotal}`);
         } else if (promoReason) {
           console.warn(`[submit-quote] promo code "${promoCodeStr}" rejected: ${promoReason}`);
         }
@@ -229,105 +200,72 @@ export async function POST(request) {
       }
     }
 
-    console.log(`[submit-quote] qty=${parsedQty} wholesale=$${wholesaleGarmentCost} garment(115%)=$${garmentCostWithMarkup} decoration=$${decorationCost} unitPrice=$${resolvedUnitCost} total=$${resolvedTotal}`);
-
-    // ── 6. Create line item groups + line items (one group per garment type) ─
+    // ── 6. Create one line item group per quote item ──────────────────────────
     const mockupUrls = artworkUrls.filter((f) => f.url).map((f) => f.url);
-    const typeOfWorkId = TYPE_OF_WORK_IDS[decorationMethod] || null;
 
-    for (let gi = 0; gi < garmentTypes.length; gi++) {
-      const garmentType = garmentTypes[gi];
+    for (let gi = 0; gi < pricedItems.length; gi++) {
+      const ip = pricedItems[gi];
       const group = await createLineItemGroup(quoteId, gi + 1);
 
-      // Look up the product in the Printavo catalog to link S&S Activewear pricing
       let productId = null;
       try {
-        productId = await findProductId(styleNumber, shirtColor || null);
+        productId = await findProductId(ip.styleNumber, ip.shirtColor || null);
       } catch {
         // Non-fatal
       }
 
-      // Create the line item with the full sell price (garment w/ 115% markup + decoration)
-      // markupPercentage: 115 tells Printavo the product cost is marked up 115%
+      const typeOfWorkId = TYPE_OF_WORK_IDS[ip.decorationMethod] || null;
+      const categoryId = ip.decorationMethod === 'Screen Printing' || ip.decorationMethod === 'DTF'
+        ? SCREEN_PRINTING_CATEGORY_ID
+        : null;
+
       const lineItem = await createLineItem({
         lineItemGroupId: group.id,
-        description: garmentType,
-        quantity: parsedQty,
-        price: resolvedUnitCost,
-        categoryId: SCREEN_PRINTING_CATEGORY_ID,
-        itemNumber: styleNumber,
-        color: shirtColor || null,
+        description: ip.garmentType,
+        quantity: ip.parsedQty,
+        price: ip.unitCost,
+        categoryId,
+        itemNumber: ip.styleNumber,
+        color: ip.shirtColor || null,
         productId: productId || null,
         markupPercentage: 115,
         position: 1,
       });
 
-      // ── 6. Attach mockup images directly to the line item ─────────────────
+      // Attach artwork mockups to the first line item group only
       if (gi === 0 && mockupUrls.length > 0) {
         for (const url of mockupUrls) {
           try {
             await createLineItemMockup(lineItem.id, url);
           } catch (err) {
-            console.warn(`Could not attach mockup to line item ${url}:`, err.message);
+            console.warn(`Could not attach mockup ${url}:`, err.message);
           }
         }
       }
 
-      // ── 7. Create imprints per group (print locations) ────────────────────
-      const imprintInputs = [];
-
-      if (locsEnabled && locations.length > 0) {
-        for (let li = 0; li < locations.length; li++) {
-          const loc = locations[li];
-          const locColors = parseInt(loc.colors) || 1;
-          const locDetails = [
-            loc.name,
-            `${locColors} color${locColors > 1 ? 's' : ''}`,
-            loc.art || null,
-          ]
-            .filter(Boolean)
-            .join(' — ');
-
-          const colId = decorationMethod === 'Screen Printing'
-            ? (SCREEN_PRINTING_COLUMN_IDS[Math.min(locColors, 6)] || null)
-            : null;
-
-          await createImprint({
-            lineItemGroupId: group.id,
-            details: locDetails,
-            typeOfWorkId,
-            pricingMatrixColumnId: colId,
-          });
-
-          imprintInputs.push({
-            details: locDetails,
-            typeOfWork: typeOfWorkId ? { id: typeOfWorkId } : undefined,
-            pricingMatrixColumn: colId ? { id: colId } : undefined,
-          });
-        }
-      } else if (gi === 0 && decorationMethod) {
-        const colId = decorationMethod === 'Screen Printing'
-          ? (SCREEN_PRINTING_COLUMN_IDS[Math.min(parsedInkColors, 6)] || null)
+      // Create imprint for this item's decoration method
+      if (ip.decorationMethod && ip.decorationMethod !== 'Not Sure') {
+        const colId = ip.decorationMethod === 'Screen Printing'
+          ? (SCREEN_PRINTING_COLUMN_IDS[Math.min(ip.parsedInkColors, 6)] || null)
           : null;
+
+        const colorLabel = ip.decorationMethod === 'Embroidery' ? 'thread colors' : 'ink colors';
+        const showColors = ['Screen Printing', 'DTF', 'Embroidery'].includes(ip.decorationMethod);
+        const imprintDetails = [
+          ip.decorationMethod,
+          showColors ? `${ip.parsedInkColors} ${colorLabel}` : null,
+        ].filter(Boolean).join(' — ');
 
         await createImprint({
           lineItemGroupId: group.id,
-          details: decorationMethod,
+          details: imprintDetails,
           typeOfWorkId,
           pricingMatrixColumnId: colId,
         });
-
-        imprintInputs.push({
-          details: decorationMethod,
-          typeOfWork: typeOfWorkId ? { id: typeOfWorkId } : undefined,
-          pricingMatrixColumn: colId ? { id: colId } : undefined,
-        });
       }
-
     }
 
-    // Generate a signed status URL so the customer can track their order
-    // without creating an account. STATUS_TOKEN_SECRET must be set in env vars.
+    // ── Generate signed order-status URL ─────────────────────────────────────
     let statusUrl = null;
     const statusSecret = process.env.STATUS_TOKEN_SECRET;
     if (statusSecret) {
@@ -339,14 +277,14 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      quoteId: quote.visualId,       // human-readable (e.g. "Q-1042")
-      printavoId: quote.id,          // node ID used for API lookups
-      quoteUrl: quote.publicUrl,     // Printavo-hosted quote URL
-      statusUrl,                     // /order-status?id=…&token=… (null if secret not set)
-      appliedPromo,                  // { code, label, discountAmount } or null
+      quoteId: quote.visualId,
+      printavoId: quote.id,
+      quoteUrl: quote.publicUrl,
+      statusUrl,
+      appliedPromo,
     });
   } catch (error) {
-    console.error('Error submitting quote to Printavo:', error);
+    console.error('[submit-quote] Error submitting quote to Printavo:', error);
     return NextResponse.json(
       { error: 'Failed to submit quote: ' + error.message },
       { status: 500 }
