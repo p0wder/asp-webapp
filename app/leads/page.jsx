@@ -198,7 +198,7 @@ function ScanControls({ onScanComplete }) {
     setScanResult(null);
     setScanError(null);
     clearTimeout(debounceRef.current);
-    if (val.trim().length >= 2) {
+    if (val.trim().length >= 3) {
       setShowSuggestions(true);
       debounceRef.current = setTimeout(async () => {
         try {
@@ -206,7 +206,7 @@ function ScanControls({ onScanComplete }) {
           const data = await res.json();
           setSuggestions(data.suggestions ?? []);
         } catch { setSuggestions([]); }
-      }, 300);
+      }, 500);
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
