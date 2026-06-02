@@ -143,10 +143,9 @@ export default function QuoteForm() {
   const [promptDismissed, setPromptDismissed] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Multi-garment items
-  const [quoteItems, setQuoteItems] = useState([]);
-  const [builder, setBuilder] = useState(DEFAULT_BUILDER);
-  const [builderError, setBuilderError] = useState("");
+  // Garment item
+  const [item, setItem] = useState(DEFAULT_BUILDER);
+  const [itemError, setItemError] = useState("");
 
   // Artwork
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -188,38 +187,28 @@ export default function QuoteForm() {
   }, []);
 
   // ── Per-item live estimate ────────────────────────────────────────────────
-  function computeItemEstimate(item) {
-    const qty = parseInt(item.qty) || 0;
+  function computeItemEstimate(it) {
+    const qty = parseInt(it.qty) || 0;
     if (qty < 1) return null;
-    const styleData = garmentPricing[item.shirtQuality];
+    const styleData = garmentPricing[it.shirtQuality];
     const wholesaleGarmentCost = styleData?.customerPrice ?? null;
     const garmentCost = wholesaleGarmentCost != null ? wholesaleGarmentCost * 1.15 : null;
-    // Only screen printing + DTF use the decoration matrix
-    const canEstimate = item.decorationMethod === "Screen Printing" || item.decorationMethod === "DTF";
-    const decorationCost = canEstimate ? (calcUnitCost(qty, item.inkColors, false, []) ?? null) : null;
+    const canEstimate = it.decorationMethod === "Screen Printing" || it.decorationMethod === "DTF";
+    const decorationCost = canEstimate ? (calcUnitCost(qty, it.inkColors, false, []) ?? null) : null;
     if (garmentCost == null && decorationCost == null) return null;
     const unitPrice = (garmentCost ?? 0) + (decorationCost ?? 0);
     const subtotal = unitPrice * qty;
     return { qty, garmentCost, decorationCost, unitPrice, subtotal, hasGarmentCost: garmentCost != null };
   }
 
-
-  // ── Grand total across all added items ────────────────────────────────────
+  // ── Total estimate for the single item ───────────────────────────────────
   const totalEstimate = (() => {
-    if (quoteItems.length === 0) return null;
-    let subtotal = 0;
-    let hasAny = false;
-    let partial = false;
-    for (const item of quoteItems) {
-      const est = computeItemEstimate(item);
-      if (est) { subtotal += est.subtotal; hasAny = true; }
-      else partial = true;
-    }
-    if (!hasAny) return null;
+    const est = computeItemEstimate(item);
+    if (!est) return null;
     const promoDiscount = (promoStatus?.valid && promoStatus?.discountAmount) ? promoStatus.discountAmount : 0;
-    const discountedSubtotal = Math.max(0, subtotal - promoDiscount);
+    const discountedSubtotal = Math.max(0, est.subtotal - promoDiscount);
     const salesTax = discountedSubtotal * 0.075;
-    return { subtotal, promoDiscount, discountedSubtotal, salesTax, totalPrice: discountedSubtotal + salesTax, partial };
+    return { subtotal: est.subtotal, promoDiscount, discountedSubtotal, salesTax, totalPrice: discountedSubtotal + salesTax, partial: !est.hasGarmentCost };
   })();
 
   // ── Promo validation (debounced) ──────────────────────────────────────────
@@ -264,23 +253,13 @@ export default function QuoteForm() {
 
   const removeFile = (i) => setUploadedFiles((prev) => prev.filter((_, idx) => idx !== i));
 
-  // ── Builder helpers ───────────────────────────────────────────────────────
-  const updateBuilder = (field, value) => setBuilder((prev) => ({ ...prev, [field]: value }));
+  // ── Item helpers ──────────────────────────────────────────────────────────
+  const updateItem = (field, value) => setItem((prev) => ({ ...prev, [field]: value }));
 
-  const handleBuilderGarmentType = (garmentType) => {
+  const handleGarmentType = (garmentType) => {
     const qualities = getQualities(garmentType);
-    setBuilder((prev) => ({ ...prev, garmentType, shirtQuality: qualities[0].itemNumber }));
+    setItem((prev) => ({ ...prev, garmentType, shirtQuality: qualities[0].itemNumber }));
   };
-
-  const addItemToQuote = () => {
-    const qty = parseInt(builder.qty);
-    if (!qty || qty < 1) { setBuilderError("Please enter a valid quantity."); return; }
-    setBuilderError("");
-    setQuoteItems((prev) => [...prev, { ...builder, qty, id: String(Date.now()) }]);
-    setBuilder(DEFAULT_BUILDER);
-  };
-
-  const removeItem = (id) => setQuoteItems((prev) => prev.filter((item) => item.id !== id));
 
   // ── Step navigation ───────────────────────────────────────────────────────
   const goNext = async () => {
@@ -288,10 +267,11 @@ export default function QuoteForm() {
       const valid = await trigger(["fname", "email"]);
       if (!valid) return;
     }
-    if (currentStep === 2 && quoteItems.length === 0) {
-      setSubmitError("Please add at least one garment to your quote.");
-      return;
+    if (currentStep === 2) {
+      const qty = parseInt(item.qty);
+      if (!qty || qty < 1) { setItemError("Please enter a valid quantity."); return; }
     }
+    setItemError("");
     setSubmitError("");
     setCurrentStep((s) => Math.min(s + 1, STEPS.length));
   };
@@ -304,11 +284,10 @@ export default function QuoteForm() {
   // ── Form submission ───────────────────────────────────────────────────────
   const onSubmit = async (data) => {
     setSubmitError("");
-    if (quoteItems.length === 0) { setSubmitError("Please add at least one garment to your quote."); return; }
     if (uploadedFiles.some((f) => f.uploading)) { setSubmitError("Please wait for files to finish uploading."); return; }
 
     const artworkUrls = uploadedFiles.filter((f) => f.url).map((f) => ({ name: f.name, url: f.url }));
-    const resolvedJobName = data.jobName.trim() || `${quoteItems.map((i) => i.garmentType).join(" + ")} — ${data.fname}`;
+    const resolvedJobName = data.jobName.trim() || `${item.garmentType} — ${data.fname}`;
 
     try {
       const res = await fetch("/api/submit-quote", {
@@ -318,7 +297,7 @@ export default function QuoteForm() {
           fname: data.fname, lname: data.lname, email: data.email,
           phone: data.phone, company: data.company, dueDate: data.dueDate,
           notes: data.notes, jobName: resolvedJobName,
-          quoteItems,
+          quoteItems: [{ ...item, qty: parseInt(item.qty) }],
           artworkUrls,
           promoCode: promoStatus?.valid && promoCode.trim() ? promoCode.trim() : null,
         }),
@@ -331,7 +310,7 @@ export default function QuoteForm() {
         statusUrl: json.statusUrl || null,
         email: data.email,
         summary: {
-          quoteItems,
+          item: { ...item, qty: parseInt(item.qty) },
           artworkCount: uploadedFiles.filter((f) => f.url).length,
           totalEstimate,
           appliedPromo: promoStatus?.valid
@@ -346,8 +325,8 @@ export default function QuoteForm() {
 
   const resetForm = () => {
     setQuoteData(null);
-    setQuoteItems([]);
-    setBuilder(DEFAULT_BUILDER);
+    setItem(DEFAULT_BUILDER);
+    setItemError("");
     setUploadedFiles([]);
     setPromoCode("");
     setPromoStatus(null);
@@ -367,8 +346,8 @@ export default function QuoteForm() {
   const btnSecondary = { padding: "11px 24px", fontSize: 14, fontWeight: 500, background: "transparent", border: "1px solid var(--border)", borderRadius: 50, cursor: "pointer", color: "var(--muted)", fontFamily: "inherit" };
 
   const isStepCompleted = (n) => n < currentStep;
-  const currentQualities = getQualities(builder.garmentType);
-  const showBuilderColors = builder.decorationMethod === "Screen Printing" || builder.decorationMethod === "DTF" || builder.decorationMethod === "Embroidery";
+  const currentQualities = getQualities(item.garmentType);
+  const showBuilderColors = item.decorationMethod === "Screen Printing" || item.decorationMethod === "DTF" || item.decorationMethod === "Embroidery";
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -386,26 +365,21 @@ export default function QuoteForm() {
             </p>
           )}
 
-          {/* Per-item summary */}
-          {quoteData.summary?.quoteItems?.length > 0 && (
+          {/* Order summary */}
+          {quoteData.summary?.item && (
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.5rem", marginBottom: "1rem", textAlign: "left" }}>
               <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", margin: "0 0 0.75rem" }}>Order summary</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {quoteData.summary.quoteItems.map((item, i) => {
-                  const est = computeItemEstimate(item);
-                  return (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13 }}>
-                      <div>
-                        <div style={{ color: "var(--foreground)", fontWeight: 500 }}>{item.garmentType} — {item.decorationMethod}</div>
-                        <div style={{ color: "var(--muted)", marginTop: 2 }}>
-                          {item.qty} qty{item.shirtColor ? ` · ${item.shirtColor}` : ""}
-                          {itemShowsColors(item) ? ` · ${item.inkColors} ${item.decorationMethod === "Embroidery" ? "thread" : "ink"} color${item.inkColors > 1 ? "s" : ""}` : ""}
-                        </div>
-                      </div>
-                      {est && <span style={{ color: "var(--foreground)", fontWeight: 500, flexShrink: 0, marginLeft: 8 }}>~${est.subtotal.toFixed(2)}</span>}
-                    </div>
-                  );
-                })}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13 }}>
+                <div>
+                  <div style={{ color: "var(--foreground)", fontWeight: 500 }}>{quoteData.summary.item.garmentType} — {quoteData.summary.item.decorationMethod}</div>
+                  <div style={{ color: "var(--muted)", marginTop: 2 }}>
+                    {quoteData.summary.item.qty} qty{quoteData.summary.item.shirtColor ? ` · ${quoteData.summary.item.shirtColor}` : ""}
+                    {itemShowsColors(quoteData.summary.item) ? ` · ${quoteData.summary.item.inkColors} ${quoteData.summary.item.decorationMethod === "Embroidery" ? "thread" : "ink"} color${quoteData.summary.item.inkColors > 1 ? "s" : ""}` : ""}
+                  </div>
+                </div>
+                {quoteData.summary.totalEstimate && (
+                  <span style={{ color: "var(--foreground)", fontWeight: 500, flexShrink: 0, marginLeft: 8 }}>~${quoteData.summary.totalEstimate.subtotal.toFixed(2)}</span>
+                )}
               </div>
             </div>
           )}
@@ -577,150 +551,95 @@ export default function QuoteForm() {
               </div>
             )}
 
-            {/* ══ STEP 2 — YOUR ORDER (multi-garment builder) ═════════════════ */}
+            {/* ══ STEP 2 — YOUR ORDER ══════════════════════════════════════════ */}
             {currentStep === 2 && (
-              <div>
-                {/* Added items list */}
-                {quoteItems.length > 0 && (
-                  <div style={{ marginBottom: "1rem" }}>
-                    <p style={{ ...sectionLabel, marginBottom: 10 }}>
-                      Your quote — {quoteItems.length} item{quoteItems.length !== 1 ? "s" : ""}
-                    </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {quoteItems.map((item) => (
-                          <div key={item.id} style={{
-                            background: "var(--surface)", border: "1px solid var(--border)",
-                            borderRadius: 10, padding: "0.875rem 1rem",
-                            display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-                          }}>
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--foreground)", marginBottom: 2 }}>
-                                {item.garmentType}
-                                <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 4 }}>— {item.decorationMethod}</span>
-                              </div>
-                              <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                                {item.qty} qty
-                                {item.shirtColor ? ` · ${item.shirtColor}` : ""}
-                                {itemShowsColors(item) ? ` · ${item.inkColors} ${item.decorationMethod === "Embroidery" ? "thread" : "ink"} color${item.inkColors > 1 ? "s" : ""}` : ""}
-                              </div>
-                            </div>
-                            <button type="button" onClick={() => removeItem(item.id)}
-                              style={{ fontSize: 12, color: "#ff4444", background: "none", border: "none", cursor: "pointer", padding: "2px 6px", fontFamily: "inherit", flexShrink: 0, marginLeft: 8 }}>
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
+              <div style={card}>
+                <StepHeader num={2} label="Your Order" />
 
-                {/* Builder card */}
-                <div style={card}>
-                  <StepHeader num={2} label={quoteItems.length === 0 ? "Build Your Order" : "Add Another Garment"} />
-
-                  {/* Garment type */}
-                  <p style={sectionLabel}>What are you decorating?</p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-                    {GARMENT_TYPES.map((g) => (
-                      <GarmentChip key={g.value} label={g.value} icon={g.icon} selected={builder.garmentType === g.value} onClick={() => handleBuilderGarmentType(g.value)} />
-                    ))}
-                  </div>
-
-                  {/* Decoration method */}
-                  <p style={sectionLabel}>Decoration method</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 20 }}>
-                    {DECORATION_METHODS.map((m) => (
-                      <SelectCard key={m.value} selected={builder.decorationMethod === m.value} onClick={() => updateBuilder("decorationMethod", m.value)}>
-                        <div style={{ fontSize: 22, marginBottom: 4 }}>{m.icon}</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>{m.label}</div>
-                      </SelectCard>
-                    ))}
-                  </div>
-
-                  {/* Style / quality */}
-                  <p style={sectionLabel}>Style</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-                    {currentQualities.map((q) => {
-                      const pricing = garmentPricing[q.itemNumber];
-                      return (
-                        <SelectCard key={q.itemNumber} selected={builder.shirtQuality === q.itemNumber} onClick={() => updateBuilder("shirtQuality", q.itemNumber)}>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--foreground)", marginBottom: 2 }}>{q.label}</div>
-                          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>{q.description}</div>
-                          {pricing?.customerPrice && (
-                            <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>
-                              From ${pricing.customerPrice.toFixed(2)}/ea
-                            </div>
-                          )}
-                        </SelectCard>
-                      );
-                    })}
-                  </div>
-
-                  {/* Color + Quantity */}
-                  <div style={twoCol}>
-                    <div>
-                      <label style={fieldLabel}>Color</label>
-                      <input style={inputBase} placeholder="e.g. Black, Navy"
-                        value={builder.shirtColor}
-                        onChange={(e) => updateBuilder("shirtColor", e.target.value)} />
-                    </div>
-                    <div>
-                      <label style={fieldLabel}>Quantity *</label>
-                      <input type="number" min="1"
-                        style={builderError ? inputErr : inputBase}
-                        placeholder="e.g. 48"
-                        value={builder.qty}
-                        onChange={(e) => { updateBuilder("qty", e.target.value); setBuilderError(""); }} />
-                      {builderError && <p style={errMsg}>{builderError}</p>}
-                    </div>
-                  </div>
-
-                  {/* Ink / thread colors */}
-                  {showBuilderColors && (
-                    <div style={{ marginBottom: 20 }}>
-                      <label style={fieldLabel}>{inkColorLabel(builder.decorationMethod)}</label>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {[1, 2, 3, 4, 5, 6].map((n) => (
-                          <button key={n} type="button"
-                            onClick={() => updateBuilder("inkColors", n)}
-                            style={{
-                              width: 42, height: 42, borderRadius: 8, fontSize: 14, fontWeight: 600,
-                              border: `2px solid ${builder.inkColors === n ? "var(--accent)" : "var(--border)"}`,
-                              background: builder.inkColors === n ? "rgba(0,255,102,0.08)" : "var(--surface)",
-                              color: builder.inkColors === n ? "var(--foreground)" : "var(--muted)",
-                              cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
-                            }}>{n}</button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Add to quote */}
-                  <button type="button" onClick={addItemToQuote}
-                    style={{
-                      width: "100%", padding: "13px 0", fontSize: 15, fontWeight: 600,
-                      background: "var(--surface)", border: "2px solid var(--accent)",
-                      borderRadius: 50, cursor: "pointer", color: "var(--accent)",
-                      fontFamily: "inherit", letterSpacing: "0.02em", marginBottom: quoteItems.length > 0 ? 0 : 0,
-                    }}>
-                    + Add to Quote
-                  </button>
+                {/* Garment type */}
+                <p style={sectionLabel}>What are you decorating?</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                  {GARMENT_TYPES.map((g) => (
+                    <GarmentChip key={g.value} label={g.value} icon={g.icon} selected={item.garmentType === g.value} onClick={() => handleGarmentType(g.value)} />
+                  ))}
                 </div>
 
-                {submitError && (
-                  <p style={{ ...errMsg, marginBottom: 12, marginTop: -4 }}>{submitError}</p>
+                {/* Decoration method */}
+                <p style={sectionLabel}>Decoration method</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 20 }}>
+                  {DECORATION_METHODS.map((m) => (
+                    <SelectCard key={m.value} selected={item.decorationMethod === m.value} onClick={() => updateItem("decorationMethod", m.value)}>
+                      <div style={{ fontSize: 22, marginBottom: 4 }}>{m.icon}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>{m.label}</div>
+                    </SelectCard>
+                  ))}
+                </div>
+
+                {/* Style / quality */}
+                <p style={sectionLabel}>Style</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+                  {currentQualities.map((q) => {
+                    const pricing = garmentPricing[q.itemNumber];
+                    return (
+                      <SelectCard key={q.itemNumber} selected={item.shirtQuality === q.itemNumber} onClick={() => updateItem("shirtQuality", q.itemNumber)}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--foreground)", marginBottom: 2 }}>{q.label}</div>
+                        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>{q.description}</div>
+                        {pricing?.customerPrice && (
+                          <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>
+                            From ${pricing.customerPrice.toFixed(2)}/ea
+                          </div>
+                        )}
+                      </SelectCard>
+                    );
+                  })}
+                </div>
+
+                {/* Color + Quantity */}
+                <div style={twoCol}>
+                  <div>
+                    <label style={fieldLabel}>Color</label>
+                    <input style={inputBase} placeholder="e.g. Black, Navy"
+                      value={item.shirtColor}
+                      onChange={(e) => updateItem("shirtColor", e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>Quantity *</label>
+                    <input type="number" min="1"
+                      style={itemError ? inputErr : inputBase}
+                      placeholder="e.g. 48"
+                      value={item.qty}
+                      onChange={(e) => { updateItem("qty", e.target.value); setItemError(""); }} />
+                    {itemError && <p style={errMsg}>{itemError}</p>}
+                  </div>
+                </div>
+
+                {/* Ink / thread colors */}
+                {showBuilderColors && (
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={fieldLabel}>{inkColorLabel(item.decorationMethod)}</label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                        <button key={n} type="button"
+                          onClick={() => updateItem("inkColors", n)}
+                          style={{
+                            width: 42, height: 42, borderRadius: 8, fontSize: 14, fontWeight: 600,
+                            border: `2px solid ${item.inkColors === n ? "var(--accent)" : "var(--border)"}`,
+                            background: item.inkColors === n ? "rgba(0,255,102,0.08)" : "var(--surface)",
+                            color: item.inkColors === n ? "var(--foreground)" : "var(--muted)",
+                            cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                          }}>{n}</button>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
-                {/* Navigation */}
+                {submitError && (
+                  <p style={{ ...errMsg, marginBottom: 12 }}>{submitError}</p>
+                )}
+
                 <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                   <button type="button" style={btnSecondary} onClick={goBack}>← Back</button>
-                  <button type="button"
-                    style={{ ...btnPrimary, flex: 1, opacity: quoteItems.length === 0 ? 0.45 : 1 }}
-                    onClick={goNext}>
-                    {quoteItems.length === 0
-                      ? "Add an item to continue"
-                      : `Continue with ${quoteItems.length} item${quoteItems.length !== 1 ? "s" : ""} →`}
-                  </button>
+                  <button type="button" style={{ ...btnPrimary, flex: 1 }} onClick={goNext}>Continue →</button>
                 </div>
               </div>
             )}
@@ -806,30 +725,21 @@ export default function QuoteForm() {
               <div style={card}>
                 <StepHeader num={4} label="Review & Submit" />
 
-                {/* Per-item review */}
+                {/* Order review */}
                 <div style={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, padding: "1rem 1.25rem", marginBottom: 16 }}>
-                  <p style={{ ...sectionLabel, marginBottom: 10 }}>Order items</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {quoteItems.map((item) => {
-                      const est = computeItemEstimate(item);
-                      return (
-                        <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13 }}>
-                          <div>
-                            <div style={{ fontWeight: 600, color: "var(--foreground)" }}>{item.garmentType} — {item.decorationMethod}</div>
-                            <div style={{ color: "var(--muted)", marginTop: 2 }}>
-                              {item.qty} qty
-                              {item.shirtColor ? ` · ${item.shirtColor}` : ""}
-                              {itemShowsColors(item) ? ` · ${item.inkColors} ${item.decorationMethod === "Embroidery" ? "thread" : "ink"} color${item.inkColors > 1 ? "s" : ""}` : ""}
-                            </div>
-                          </div>
-                          <div style={{ flexShrink: 0, marginLeft: 8, textAlign: "right" }}>
-                            {est
-                              ? <span style={{ color: "var(--foreground)", fontWeight: 500 }}>~${est.subtotal.toFixed(2)}</span>
-                              : <span style={{ color: "var(--muted)", fontSize: 11 }}>Pricing TBD</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <p style={{ ...sectionLabel, marginBottom: 10 }}>Order summary</p>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "var(--foreground)" }}>{item.garmentType} — {item.decorationMethod}</div>
+                      <div style={{ color: "var(--muted)", marginTop: 2 }}>
+                        {item.qty} qty
+                        {item.shirtColor ? ` · ${item.shirtColor}` : ""}
+                        {itemShowsColors(item) ? ` · ${item.inkColors} ${item.decorationMethod === "Embroidery" ? "thread" : "ink"} color${item.inkColors > 1 ? "s" : ""}` : ""}
+                      </div>
+                    </div>
+                    {totalEstimate
+                      ? <span style={{ color: "var(--foreground)", fontWeight: 500, flexShrink: 0, marginLeft: 8 }}>~${totalEstimate.subtotal.toFixed(2)}</span>
+                      : <span style={{ color: "var(--muted)", fontSize: 11, flexShrink: 0, marginLeft: 8 }}>Pricing TBD</span>}
                   </div>
                   <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, fontSize: 13, color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
                     <span>Artwork files</span>
