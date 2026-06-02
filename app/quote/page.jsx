@@ -15,15 +15,28 @@ const GARMENT_TYPES = [
   { value: "Headwear",   icon: "🧢" },
 ];
 
-const APPAREL_QUALITIES = [
-  { label: "Standard", itemNumber: "5000", description: "Gildan Heavy Cotton" },
-  { label: "Premium", itemNumber: "6210", description: "Next Level CVC Crew" },
-];
-
-const HEADWEAR_QUALITIES = [
-  { label: "Standard", itemNumber: "112FP", description: "Richardson Trucker Cap" },
-  { label: "Premium", itemNumber: "6277", description: "Flexfit Cotton Blend" },
-];
+const QUALITIES = {
+  "T-Shirt": [
+    { label: "Standard", itemNumber: "5000", description: "Gildan Heavy Cotton" },
+    { label: "Premium",  itemNumber: "6210", description: "Next Level CVC" },
+  ],
+  "Long Sleeve": [
+    { label: "Standard", itemNumber: "5400", description: "Gildan Heavy Cotton LS" },
+    { label: "Premium",  itemNumber: "6211", description: "Next Level CVC LS" },
+  ],
+  "Sweatshirt": [
+    { label: "Standard", itemNumber: "18000", description: "Gildan Heavy Blend Crew" },
+    { label: "Premium",  itemNumber: "SS3000", description: "Ind. Trading Crew" },
+  ],
+  "Hoodie": [
+    { label: "Standard", itemNumber: "18500", description: "Gildan Heavy Blend" },
+    { label: "Premium",  itemNumber: "SS4500", description: "Ind. Trading Hoodie" },
+  ],
+  "Headwear": [
+    { label: "Standard", itemNumber: "C402",  description: "Port Authority Trucker" },
+    { label: "Premium",  itemNumber: "112R",  description: "Richardson 112 Trucker" },
+  ],
+};
 
 const DECORATION_METHODS = [
   { value: "Screen Printing", label: "Screen Printing", icon: "🖨️" },
@@ -54,7 +67,7 @@ const DEFAULT_BUILDER = {
 };
 
 function getQualities(garmentType) {
-  return garmentType === "Headwear" ? HEADWEAR_QUALITIES : APPAREL_QUALITIES;
+  return QUALITIES[garmentType] ?? QUALITIES["T-Shirt"];
 }
 
 function itemShowsColors(item) {
@@ -160,7 +173,7 @@ export default function QuoteForm() {
 
   // Load garment pricing — apparel + headwear styles
   useEffect(() => {
-    fetch("/api/garment-pricing?styles=5000,6210,112FP,6277")
+    fetch("/api/garment-pricing?styles=5000,6210,5400,6211,18000,SS3000,18500,SS4500,C402,112R")
       .then((r) => r.json())
       .then((data) => setGarmentPricing(data))
       .catch(() => {});
