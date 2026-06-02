@@ -33,7 +33,7 @@ const QUALITIES = {
     { label: "Premium",  itemNumber: "SS4500", description: "Ind. Trading Hoodie" },
   ],
   "Headwear": [
-    { label: "Standard", itemNumber: "C402",  description: "Port Authority Trucker" },
+    { label: "Standard", itemNumber: "VC400", description: "Valucap Twill Trucker" },
     { label: "Premium",  itemNumber: "112R",  description: "Richardson 112 Trucker" },
   ],
 };
@@ -173,7 +173,7 @@ export default function QuoteForm() {
 
   // Load garment pricing — apparel + headwear styles
   useEffect(() => {
-    fetch("/api/garment-pricing?styles=5000,6210,5400,6211,18000,SS3000,18500,SS4500,C402,112R")
+    fetch("/api/garment-pricing?styles=5000,6210,5400,6211,18000,SS3000,18500,SS4500,VC400,112R")
       .then((r) => r.json())
       .then((data) => setGarmentPricing(data))
       .catch(() => {});
