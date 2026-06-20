@@ -15,11 +15,11 @@ test.describe('Quote form', () => {
     await expect(page.locator('input[name="phone"]')).toBeVisible();
   });
 
-  test('advances to step 2 (Garment) after filling required fields', async ({ page }) => {
+  test('advances to step 2 (Your Order) after filling required fields', async ({ page }) => {
     await page.locator('input[name="fname"]').fill('Test');
     await page.locator('input[name="email"]').fill('test@example.com');
     await page.getByRole('button', { name: /Continue/i }).click();
-    await expect(page.getByRole('heading', { name: /^Garment$/i })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: /Your Order/i })).toBeVisible({ timeout: 5000 });
   });
 
   test('shows required-field errors if step 1 submitted empty', async ({ page }) => {
