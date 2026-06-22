@@ -6,8 +6,21 @@ import { CartProvider } from "@/context/CartContext";
 import { ClerkProvider } from "@clerk/nextjs";
 
 export const metadata = {
+  metadataBase: new URL(process.env.NEXTAUTH_URL || "https://threadgiant.com"),
   title: "Thread Giant - Custom Screen Printing",
   description: "Professional custom screen printing services for t-shirts, hoodies, and more.",
+  openGraph: {
+    title: "Thread Giant - Custom Screen Printing",
+    description: "Professional custom screen printing services for t-shirts, hoodies, and more.",
+    images: [{ url: "/thread-giant-logo-1.png", width: 1200, height: 630, alt: "Thread Giant" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Thread Giant - Custom Screen Printing",
+    description: "Professional custom screen printing services for t-shirts, hoodies, and more.",
+    images: ["/thread-giant-logo-1.png"],
+  },
 };
 
 // Inline script to apply the saved theme before first paint, preventing flash
