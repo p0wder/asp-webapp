@@ -12,7 +12,7 @@ const GARMENT_TYPES = [
   { value: "Hoodie",     icon: "🧥" },
   { value: "Sweatshirt", icon: "🩱" },
   { value: "Long Sleeve",icon: "👔" },
-  { value: "Headwear",   icon: "🧢" },
+  { value: "Headwear",   imgSrc: "/thread-giant-logo-1.png" },
 ];
 
 const QUALITIES = {
@@ -113,7 +113,7 @@ function SelectCard({ selected, onClick, children, style = {} }) {
   );
 }
 
-function GarmentChip({ label, icon, selected, onClick }) {
+function GarmentChip({ label, icon, imgSrc, selected, onClick }) {
   return (
     <button
       type="button"
@@ -130,7 +130,10 @@ function GarmentChip({ label, icon, selected, onClick }) {
         minWidth: 72,
       }}
     >
-      <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
+      {imgSrc
+        ? <img src={imgSrc} alt={label} style={{ width: 32, height: 32, objectFit: "contain" }} />
+        : <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
+      }
       <span style={{ fontSize: 12 }}>{label}</span>
     </button>
   );
@@ -560,7 +563,7 @@ export default function QuoteForm() {
                 <p style={sectionLabel}>What are you decorating?</p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
                   {GARMENT_TYPES.map((g) => (
-                    <GarmentChip key={g.value} label={g.value} icon={g.icon} selected={item.garmentType === g.value} onClick={() => handleGarmentType(g.value)} />
+                    <GarmentChip key={g.value} label={g.value} icon={g.icon} imgSrc={g.imgSrc} selected={item.garmentType === g.value} onClick={() => handleGarmentType(g.value)} />
                   ))}
                 </div>
 
@@ -584,11 +587,6 @@ export default function QuoteForm() {
                       <SelectCard key={q.itemNumber} selected={item.shirtQuality === q.itemNumber} onClick={() => updateItem("shirtQuality", q.itemNumber)}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "var(--foreground)", marginBottom: 2 }}>{q.label}</div>
                         <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>{q.description}</div>
-                        {pricing?.customerPrice && (
-                          <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>
-                            From ${pricing.customerPrice.toFixed(2)}/ea
-                          </div>
-                        )}
                       </SelectCard>
                     );
                   })}
@@ -737,46 +735,13 @@ export default function QuoteForm() {
                         {itemShowsColors(item) ? ` · ${item.inkColors} ${item.decorationMethod === "Embroidery" ? "thread" : "ink"} color${item.inkColors > 1 ? "s" : ""}` : ""}
                       </div>
                     </div>
-                    {totalEstimate
-                      ? <span style={{ color: "var(--foreground)", fontWeight: 500, flexShrink: 0, marginLeft: 8 }}>~${totalEstimate.subtotal.toFixed(2)}</span>
-                      : <span style={{ color: "var(--muted)", fontSize: 11, flexShrink: 0, marginLeft: 8 }}>Pricing TBD</span>}
+                    <span style={{ color: "var(--muted)", fontSize: 11, flexShrink: 0, marginLeft: 8 }}>Pricing TBD</span>
                   </div>
                   <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, fontSize: 13, color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
                     <span>Artwork files</span>
                     <span style={{ color: "var(--foreground)", fontWeight: 500 }}>{uploadedFiles.filter((f) => f.url).length} uploaded</span>
                   </div>
                 </div>
-
-                {/* Total estimate */}
-                {totalEstimate && (
-                  <div style={{ background: "var(--background)", border: "1px solid var(--accent)", borderRadius: 10, padding: "1rem 1.25rem", marginBottom: 16 }}>
-                    <p style={{ ...sectionLabel, margin: "0 0 0.6rem", color: "var(--accent)" }}>Estimated price</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
-                        <span>Subtotal</span>
-                        <span>${totalEstimate.subtotal.toFixed(2)}{totalEstimate.partial ? "*" : ""}</span>
-                      </div>
-                      {totalEstimate.promoDiscount > 0 && promoStatus?.message && (
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#00FF66" }}>
-                          <span>Discount ({promoStatus.message.split(" — ")[0]})</span>
-                          <span>−${totalEstimate.promoDiscount.toFixed(2)}</span>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--muted)" }}>
-                        <span>Est. sales tax (7.5%)</span>
-                        <span>${totalEstimate.salesTax.toFixed(2)}</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, color: "var(--foreground)", borderTop: "1px solid var(--border)", paddingTop: 6, marginTop: 2 }}>
-                        <span>Estimated total</span>
-                        <span style={{ color: "var(--accent)" }}>${totalEstimate.totalPrice.toFixed(2)}</span>
-                      </div>
-                      {totalEstimate.partial && (
-                        <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0", opacity: 0.7 }}>* Embroidery and custom items confirmed after review.</p>
-                      )}
-                      <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0", opacity: 0.7 }}>Estimate only — final price confirmed after review.</p>
-                    </div>
-                  </div>
-                )}
 
                 {/* Promo code */}
                 <div style={{ marginBottom: 16 }}>
