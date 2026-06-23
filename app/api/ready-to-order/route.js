@@ -57,7 +57,7 @@ export async function GET() {
     while (hasNextPage) {
       const data = await gql(
         `query ReadyToOrderInvoices($statusIds: [ID!], $after: String) {
-          invoices(first: 50, statusIds: $statusIds, after: $after) {
+          invoices(first: 4, statusIds: $statusIds, after: $after) {
             nodes { ${invoiceFragment} }
             pageInfo { hasNextPage endCursor }
           }
