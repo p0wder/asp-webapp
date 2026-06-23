@@ -16,72 +16,65 @@ export async function GET() {
   }
 
   try {
-    const data = await gql(
-      `query ReadyToOrderInvoices($statusIds: [ID!]) {
-        invoices(first: 4, statusIds: $statusIds) {
-          nodes {
-            id
-            visualId
-            nickname
-            total
-            subtotal
-            amountPaid
-            amountOutstanding
-            paidInFull
-            customerDueAt
-            createdAt
-            productionNote
-            customerNote
-            tags
-            status {
+    const invoiceFragment = `
+      id
+      visualId
+      nickname
+      total
+      subtotal
+      amountPaid
+      amountOutstanding
+      paidInFull
+      customerDueAt
+      createdAt
+      productionNote
+      customerNote
+      tags
+      status { id name color }
+      contact { id fullName firstName lastName email phone }
+      lineItemGroups {
+        nodes {
+          id
+          lineItems {
+            nodes {
               id
-              name
+              description
+              itemNumber
               color
-            }
-            contact {
-              id
-              fullName
-              firstName
-              lastName
-              email
-              phone
-            }
-            lineItemGroups {
-              nodes {
-                id
-                lineItems {
-                  nodes {
-                    id
-                    description
-                    itemNumber
-                    color
-                    price
-                    items
-                    sizes {
-                      size
-                      count
-                    }
-                  }
-                }
-              }
+              price
+              items
+              sizes { size count }
             }
           }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          totalNodes
         }
-      }`,
-      { statusIds: [READY_TO_ORDER_STATUS_ID] }
-    );
+      }
+    `;
 
-    const invoices = data.invoices?.nodes || [];
+    const allInvoices = [];
+    let cursor = null;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const data = await gql(
+        `query ReadyToOrderInvoices($statusIds: [ID!], $after: String) {
+          invoices(first: 50, statusIds: $statusIds, after: $after) {
+            nodes { ${invoiceFragment} }
+            pageInfo { hasNextPage endCursor }
+          }
+        }`,
+        { statusIds: [READY_TO_ORDER_STATUS_ID], after: cursor }
+      );
+
+      const page = data.invoices?.nodes || [];
+      allInvoices.push(...page);
+      hasNextPage = data.invoices?.pageInfo?.hasNextPage ?? false;
+      cursor = data.invoices?.pageInfo?.endCursor ?? null;
+    }
 
     return NextResponse.json({
       success: true,
-      total: data.invoices?.totalNodes ?? invoices.length,
-      invoices,
+      total: allInvoices.length,
+      invoices: allInvoices,
     });
   } catch (error) {
     console.error('[ready-to-order] Error fetching invoices:', error.message);
