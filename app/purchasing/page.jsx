@@ -173,16 +173,16 @@ function getRowCost(li, rowSizes, classification, getQty) {
  */
 function useLineItemClassification(lineItems) {
   const [classifications, setClassifications] = useState(() => new Map());
-  const idSignature = useMemo(() => lineItems.map((li) => li.id).join('|'), [lineItems]);
+  const submittedIds = useRef(new Set());
 
   const runLookup = useCallback(async (items) => {
     if (items.length === 0) return;
+    for (const li of items) submittedIds.current.add(li.id);
     setClassifications((prev) => {
       const next = new Map(prev);
       for (const li of items) next.set(li.id, { lineItemId: li.id, state: 'pending' });
       return next;
     });
-
     try {
       const res = await fetch('/api/ss-catalog-lookup', {
         method: 'POST',
@@ -197,7 +197,6 @@ function useLineItemClassification(lineItems) {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Lookup failed');
-
       setClassifications((prev) => {
         const next = new Map(prev);
         for (const r of data.results) next.set(r.lineItemId, r);
@@ -214,21 +213,28 @@ function useLineItemClassification(lineItems) {
     }
   }, []);
 
+  // Only classify line items that haven't been submitted yet — safe to append pages
   useEffect(() => {
-    if (lineItems.length === 0) return;
-    runLookup(lineItems);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idSignature, runLookup]);
+    const newItems = lineItems.filter((li) => !submittedIds.current.has(li.id));
+    if (newItems.length === 0) return;
+    runLookup(newItems);
+  }, [lineItems, runLookup]);
+
+  const reset = useCallback(() => {
+    submittedIds.current.clear();
+    setClassifications(new Map());
+  }, []);
 
   const retry = useCallback(
     (lineItemId) => {
+      submittedIds.current.delete(lineItemId);
       const li = lineItems.find((x) => x.id === lineItemId);
       if (li) runLookup([li]);
     },
     [lineItems, runLookup],
   );
 
-  return { classifications, retry };
+  return { classifications, retry, reset };
 }
 
 function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabledReason }) {
@@ -972,14 +978,17 @@ function buildPartialStateRequestEntry(invoice, classifications) {
 export default function OrdersPage() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
+  const [cursor, setCursor] = useState(null);
+  const [hasNextPage, setHasNextPage] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
-  // Map keyed by sourceInvoiceVisualId → per-invoice partial-state result
-  // from /api/orders-partial-state. Updated in batch after invoices+
-  // classifications resolve, or per-invoice on manual retry.
   const [partialStateByInvoiceId, setPartialStateByInvoiceId] = useState(() => new Map());
 
-  // Flatten every line item across every loaded invoice into a single list for batch lookup
+  const fetchingRef = useRef(false);
+  const sentinelRef = useRef(null);
+  const processedPartialIds = useRef(new Set());
+
   const allLineItems = useMemo(
     () =>
       invoices.flatMap((inv) =>
@@ -987,27 +996,24 @@ export default function OrdersPage() {
       ),
     [invoices],
   );
-  const { classifications, retry } = useLineItemClassification(allLineItems);
+  const { classifications, retry, reset: resetClassifications } = useLineItemClassification(allLineItems);
 
-  // Batch partial-state lookup. Fires once per (invoices, classifications) pair —
-  // specifically when every line item across every invoice has a non-pending
-  // classification (matched | sanmar | no-match | failed). One POST carries the
-  // whole batch; per-invoice retries take a separate path (handlePartialStateRetry).
+  // Incremental partial-state lookup — only evaluates invoices not yet processed
   useEffect(() => {
-    if (invoices.length === 0) return;
+    const unprocessed = invoices.filter((inv) => !processedPartialIds.current.has(inv.visualId));
+    if (unprocessed.length === 0) return;
 
     const requestInvoices = [];
-    for (const inv of invoices) {
+    for (const inv of unprocessed) {
       const entry = buildPartialStateRequestEntry(inv, classifications);
       if (entry) requestInvoices.push(entry);
     }
 
-    // Not every invoice is ready yet — bail out, the effect re-runs as
-    // classifications populate.
-    if (requestInvoices.length !== invoices.length) return;
+    if (requestInvoices.length !== unprocessed.length) return;
+
+    for (const inv of unprocessed) processedPartialIds.current.add(inv.visualId);
 
     let cancelled = false;
-
     (async () => {
       try {
         const res = await fetch('/api/orders-partial-state', {
@@ -1018,9 +1024,8 @@ export default function OrdersPage() {
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok || !data.ok) {
-          // Treat the whole batch as unavailable so each card shows a retry button.
-          setPartialStateByInvoiceId(() => {
-            const next = new Map();
+          setPartialStateByInvoiceId((prev) => {
+            const next = new Map(prev);
             for (const inv of requestInvoices) {
               next.set(inv.sourceInvoiceVisualId, {
                 sourceInvoiceVisualId: inv.sourceInvoiceVisualId,
@@ -1034,17 +1039,15 @@ export default function OrdersPage() {
           });
           return;
         }
-        setPartialStateByInvoiceId(() => {
-          const next = new Map();
-          for (const r of data.results || []) {
-            next.set(r.sourceInvoiceVisualId, r);
-          }
+        setPartialStateByInvoiceId((prev) => {
+          const next = new Map(prev);
+          for (const r of data.results || []) next.set(r.sourceInvoiceVisualId, r);
           return next;
         });
       } catch (err) {
         if (cancelled) return;
-        setPartialStateByInvoiceId(() => {
-          const next = new Map();
+        setPartialStateByInvoiceId((prev) => {
+          const next = new Map(prev);
           for (const inv of requestInvoices) {
             next.set(inv.sourceInvoiceVisualId, {
               sourceInvoiceVisualId: inv.sourceInvoiceVisualId,
@@ -1059,13 +1062,9 @@ export default function OrdersPage() {
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [invoices, classifications]);
 
-  // Manual retry — re-POSTs a single invoice (the route accepts an array;
-  // we pass a one-element array) and updates only that invoice's map entry.
   const handlePartialStateRetry = useCallback(
     async (invoice) => {
       const entry = buildPartialStateRequestEntry(invoice, classifications);
@@ -1120,9 +1119,6 @@ export default function OrdersPage() {
   const { cart, addItem } = useCart();
   const cartTotals = totals(cart);
 
-  // Expand a Printavo line item into one CartItem per (size, color) variant.
-  // The OrderOverview component computes per-SS-size quantities (allowing for
-  // hat sizes like S/M, L/XL, etc.) and attaches them as lineItem.sizeAllocations.
   const handleAddToCart = useCallback(
     (invoice, lineItem, variants) => {
       let added = 0;
@@ -1163,32 +1159,67 @@ export default function OrdersPage() {
     [addItem],
   );
 
-  async function fetchInvoices() {
-    setLoading(true);
-    setError(null);
+  const fetchPage = useCallback(async (afterCursor) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    const isInitial = afterCursor === null;
+    if (isInitial) { setLoading(true); setError(null); }
+    else setLoadingMore(true);
     try {
-      const res = await fetch('/api/ready-to-order');
+      const url = afterCursor
+        ? `/api/ready-to-order?cursor=${encodeURIComponent(afterCursor)}`
+        : '/api/ready-to-order';
+      const res = await fetch(url);
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to load invoices');
-      setInvoices(data.invoices || []);
-      setLastRefresh(new Date());
+      setInvoices((prev) => isInitial ? (data.invoices || []) : [...prev, ...(data.invoices || [])]);
+      setHasNextPage(data.hasNextPage ?? false);
+      setCursor(data.endCursor ?? null);
+      if (isInitial) setLastRefresh(new Date());
     } catch (err) {
-      setError(err.message);
+      if (isInitial) setError(err.message);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
+      else setLoadingMore(false);
+      fetchingRef.current = false;
     }
-  }
+  }, []);
 
   useEffect(() => {
-    fetchInvoices();
-  }, []);
+    fetchPage(null);
+  }, [fetchPage]);
+
+  // Load next page when sentinel scrolls into view (400px lookahead so load
+  // is invisible to the user before they reach the bottom)
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) fetchPage(cursor); },
+      { rootMargin: '400px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [cursor, hasNextPage, fetchPage]);
+
+  function handleRefresh() {
+    fetchingRef.current = false;
+    processedPartialIds.current.clear();
+    resetClassifications();
+    setInvoices([]);
+    setCursor(null);
+    setHasNextPage(true);
+    setError(null);
+    setPartialStateByInvoiceId(new Map());
+    fetchPage(null);
+  }
 
   const paidCount = invoices.filter((i) => i.paidInFull).length;
   const unpaidCount = invoices.filter((i) => !i.paidInFull).length;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
-      {/* Sticky cart strip — visible while scrolling long invoice lists (T021) */}
+      {/* Sticky cart strip */}
       {cartTotals.itemCount > 0 && (
         <div
           className="sticky top-0 z-10 -mx-4 px-4 py-2 mb-4 flex items-center justify-between gap-3 backdrop-blur"
@@ -1218,7 +1249,7 @@ export default function OrdersPage() {
           </p>
         </div>
         <button
-          onClick={fetchInvoices}
+          onClick={handleRefresh}
           disabled={loading}
           className="px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-50"
           style={{ background: 'var(--accent)', color: '#fff' }}
@@ -1227,12 +1258,12 @@ export default function OrdersPage() {
         </button>
       </div>
 
-      {/* Summary badges */}
+      {/* Summary badges — counts update live as pages load */}
       {!loading && !error && invoices.length > 0 && (
         <div className="flex gap-3 mb-6 flex-wrap">
           <div className="px-4 py-2 rounded-lg text-sm font-medium" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <span style={{ color: 'var(--muted)' }}>Total: </span>
-            <span className="font-bold">{invoices.length}</span>
+            <span style={{ color: 'var(--muted)' }}>Loaded: </span>
+            <span className="font-bold">{invoices.length}{hasNextPage ? '+' : ''}</span>
           </div>
           <div className="px-4 py-2 rounded-lg text-sm font-medium bg-green-500 text-white">
             ✓ Paid: {paidCount}
@@ -1248,7 +1279,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Loading state */}
+      {/* Initial loading state */}
       {loading && (
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
@@ -1263,7 +1294,7 @@ export default function OrdersPage() {
         <div className="rounded-xl border border-red-500 bg-red-50 dark:bg-red-950 p-6 text-center">
           <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
           <button
-            onClick={fetchInvoices}
+            onClick={handleRefresh}
             className="mt-3 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white"
           >
             Try Again
@@ -1281,7 +1312,7 @@ export default function OrdersPage() {
       )}
 
       {/* Invoice cards */}
-      {!loading && !error && invoices.length > 0 && (
+      {invoices.length > 0 && (
         <div className="flex flex-col gap-4">
           {invoices.map((invoice) => (
             <InvoiceCard
@@ -1295,6 +1326,29 @@ export default function OrdersPage() {
             />
           ))}
         </div>
+      )}
+
+      {/* Sentinel — IntersectionObserver watches this to trigger the next page fetch */}
+      {!error && (
+        <>
+          {hasNextPage && (
+            <div ref={sentinelRef} className="py-10 flex justify-center">
+              {loadingMore && (
+                <span
+                  className="text-3xl animate-spin inline-block"
+                  style={{ color: 'var(--muted)' }}
+                >
+                  ⟳
+                </span>
+              )}
+            </div>
+          )}
+          {!hasNextPage && invoices.length > 0 && (
+            <p className="py-8 text-center text-sm" style={{ color: 'var(--muted)' }}>
+              All {invoices.length} invoice{invoices.length === 1 ? '' : 's'} loaded
+            </p>
+          )}
+        </>
       )}
     </div>
   );
