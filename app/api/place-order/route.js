@@ -1,3 +1,4 @@
+import { currentUser } from '@clerk/nextjs/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
 import { placeOrderChain } from '@/lib/placeOrderChain';
@@ -80,13 +81,19 @@ export async function POST(request) {
   );
 
   try {
+    const user = await currentUser();
+    const submittedBy =
+      user?.emailAddresses?.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ||
+      user?.fullName ||
+      'unknown';
+
     const result = await placeOrderChain({
       shippingAddress,
       lines,
       poNumber,
       comments,
       paymentProfileId,
-      submittedBy: session.user?.email || session.user?.name || 'unknown',
+      submittedBy,
     });
     console.log(
       '[place-order] chain complete:',
