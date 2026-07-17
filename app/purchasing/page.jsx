@@ -40,6 +40,14 @@ function sizeLabel(sizeEnum) {
   return map[sizeEnum] || sizeEnum;
 }
 
+// Youth-specific SS styles (e.g. "5000B") carry their own distinct product/style
+// number, so SS Activewear doesn't prefix their variant sizeNames with "Y" — a
+// youth style's variants are just "XS"/"S"/"M"/"L"/"XL". Printavo's size buckets
+// are still "YXS"/"YS"/... though, so strip a leading "Y" when joining the two.
+function normalizeSizeForMatch(label) {
+  return label.toUpperCase().replace(/^Y(?=.)/, '');
+}
+
 /**
  * Returns the sizes to render for a line item, plus the target qty the user
  * must allocate across them.
@@ -87,15 +95,15 @@ function getRowSizes(lineItem, classification) {
     }
   }
 
-  // Pre-fill from Printavo where labels match (case-insensitive)
+  // Pre-fill from Printavo where labels match (case-insensitive, Y-prefix-insensitive)
   const printavoByLabel = new Map(
-    printavoEntries.map((s) => [sizeLabel(s.size).toUpperCase(), s.count || 0]),
+    printavoEntries.map((s) => [normalizeSizeForMatch(sizeLabel(s.size)), s.count || 0]),
   );
 
   const sizes = [...bySize.values()]
     .map((s) => ({
       ...s,
-      prefillQty: printavoByLabel.get(s.sizeName.toUpperCase()) || 0,
+      prefillQty: printavoByLabel.get(normalizeSizeForMatch(s.sizeName)) || 0,
     }))
     .sort((a, b) => String(a.sizeOrder).localeCompare(String(b.sizeOrder)));
 
