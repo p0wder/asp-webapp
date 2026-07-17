@@ -16,11 +16,16 @@ function formatDate(dateStr) {
 }
 
 // Canonical size order for display
-const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+const SIZE_ORDER = ['YXS', 'YS', 'YM', 'YL', 'YXL', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
 
 // Map Printavo size enum values → display labels
 function sizeLabel(sizeEnum) {
   const map = {
+    size_yxs: 'YXS',
+    size_ys: 'YS',
+    size_ym: 'YM',
+    size_yl: 'YL',
+    size_yxl: 'YXL',
     size_xs: 'XS',
     size_s: 'S',
     size_m: 'M',
