@@ -20,6 +20,9 @@ Create `.env.local` in the repo root (git-ignored). Required variables:
 |---|---|
 | `SS_ACTIVEWEAR_USERNAME` | SS Activewear dealer account username |
 | `SS_ACTIVEWEAR_PASSWORD` | SS Activewear dealer account password |
+| `SANMAR_CUSTOMER_NUMBER` | SanMar numeric customer/account number (sent inside every SOAP request body) |
+| `SANMAR_USERNAME` | SanMar.com web login username used for SOAP API authentication |
+| `SANMAR_PASSWORD` | SanMar.com web login password used for SOAP API authentication |
 | `PRINTAVO_EMAIL` | Printavo API account email |
 | `PRINTAVO_API_TOKEN` | Printavo API token |
 | `NEXTAUTH_SECRET` | Random secret for admin session signing |
@@ -58,7 +61,7 @@ To generate a password hash: `node scripts/hash-password.mjs yourpassword`
 - **Styling**: Tailwind CSS v4
 - **Auth**: NextAuth.js v4
 - **Deployment**: Vercel
-- **External APIs**: Printavo, SS Activewear
+- **External APIs**: Printavo, SS Activewear, SanMar
 
 ## Deployment
 
