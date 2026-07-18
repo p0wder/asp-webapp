@@ -265,9 +265,19 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabl
   if (state === 'matched') {
     if (justAdded > 0) {
       return (
-        <span className="inline-flex items-center text-xs font-semibold text-green-600 dark:text-green-400">
+        <button
+          type="button"
+          disabled
+          className="px-3 py-2 sm:py-1 rounded-md text-xs font-semibold"
+          style={{
+            background: 'var(--surface)',
+            color: 'var(--muted)',
+            border: '1px solid var(--border)',
+            cursor: 'not-allowed',
+          }}
+        >
           ✓ Added {justAdded}
-        </span>
+        </button>
       );
     }
     return (
