@@ -250,8 +250,7 @@ function useLineItemClassification(lineItems) {
   return { classifications, retry, reset };
 }
 
-function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabledReason }) {
-  const [justAdded, setJustAdded] = useState(0);
+function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabledReason, cartQty = 0 }) {
   const state = result?.state || 'pending';
 
   if (state === 'pending') {
@@ -263,7 +262,7 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabl
   }
 
   if (state === 'matched') {
-    if (justAdded > 0) {
+    if (cartQty > 0) {
       return (
         <button
           type="button"
@@ -276,7 +275,7 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabl
             cursor: 'not-allowed',
           }}
         >
-          ✓ Added {justAdded}
+          ✓ Added {cartQty}
         </button>
       );
     }
@@ -286,11 +285,7 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabl
         disabled={disabled}
         onClick={() => {
           if (disabled) return;
-          const n = onAddToCart(lineItem, result.variants);
-          if (n > 0) {
-            setJustAdded(n);
-            setTimeout(() => setJustAdded(0), 2000);
-          }
+          onAddToCart(lineItem, result.variants);
         }}
         className="px-3 py-2 sm:py-1 rounded-md text-xs font-semibold transition-opacity"
         style={{
@@ -416,7 +411,7 @@ function SizeEditor({ rowSizes, getQty, onChange, status, maxPairs = 4 }) {
   );
 }
 
-function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }) {
+function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry, cartQtyByLineItemId }) {
   // Per-row, per-size user-entered quantities. Shape: { [lineItemId]: { [sizeName]: qty } }
   // Sparse: a missing entry falls back to the prefill from getRowSizes(), so the user
   // sees Printavo's numbers by default and only overrides change state.
@@ -484,7 +479,8 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
     // mismatch but doesn't enforce it (users routinely buy extras as overrun).
     const addDisabled = rowSizes.mode === 'ss' && qty === 0;
     const addDisabledReason = addDisabled ? `Allocate at least 1 across the available sizes` : null;
-    return { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, effectiveLi: effectiveLineItem(li, rowSizes) };
+    const cartQty = cartQtyByLineItemId?.get(li.id) || 0;
+    return { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, cartQty, effectiveLi: effectiveLineItem(li, rowSizes) };
   }
 
   return (
@@ -492,7 +488,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
       {/* Mobile card list — hidden at sm+ */}
       <div className="mt-3 flex flex-col gap-2 sm:hidden">
         {allLineItems.map((li) => {
-          const { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, effectiveLi } = getLineItemRenderProps(li);
+          const { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, cartQty, effectiveLi } = getLineItemRenderProps(li);
           return (
             <div
               key={li.id}
@@ -508,6 +504,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                   onRetry={onRetry}
                   disabled={addDisabled}
                   disabledReason={addDisabledReason}
+                  cartQty={cartQty}
                 />
               </div>
               <p className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -563,7 +560,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
           </thead>
           <tbody>
             {allLineItems.map((li) => {
-              const { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, effectiveLi } = getLineItemRenderProps(li);
+              const { classification, rowSizes, qty, unitPriceLabel, lineTotal, status, addDisabled, addDisabledReason, cartQty, effectiveLi } = getLineItemRenderProps(li);
               return (
                 <tr
                   key={li.id}
@@ -604,6 +601,7 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
                       onRetry={onRetry}
                       disabled={addDisabled}
                       disabledReason={addDisabledReason}
+                      cartQty={cartQty}
                     />
                   </td>
                 </tr>
@@ -739,7 +737,7 @@ function PartialDrilldown({ summary }) {
   );
 }
 
-function InvoiceCard({ invoice, classifications, partialState, onRetryPartialState, onAddToCart, onRetry }) {
+function InvoiceCard({ invoice, classifications, partialState, onRetryPartialState, onAddToCart, onRetry, cartQtyByLineItemId }) {
   const [expanded, setExpanded] = useState(false);
   const [partialOpen, setPartialOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -953,6 +951,7 @@ function InvoiceCard({ invoice, classifications, partialState, onRetryPartialSta
             classifications={classifications}
             onAddToCart={onAddToCartBound}
             onRetry={onRetry}
+            cartQtyByLineItemId={cartQtyByLineItemId}
           />
         </div>
       )}
@@ -1141,6 +1140,13 @@ export default function OrdersPage() {
 
   const { cart, addItem } = useCart();
   const cartTotals = totals(cart);
+  const cartQtyByLineItemId = useMemo(() => {
+    const m = new Map();
+    for (const item of cart.items) {
+      m.set(item.sourceLineItemId, (m.get(item.sourceLineItemId) || 0) + item.qty);
+    }
+    return m;
+  }, [cart]);
 
   const handleAddToCart = useCallback(
     (invoice, lineItem, variants) => {
@@ -1346,6 +1352,7 @@ export default function OrdersPage() {
               onRetryPartialState={handlePartialStateRetry}
               onAddToCart={handleAddToCart}
               onRetry={retry}
+              cartQtyByLineItemId={cartQtyByLineItemId}
             />
           ))}
         </div>
