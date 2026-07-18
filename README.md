@@ -23,6 +23,7 @@ Create `.env.local` in the repo root (git-ignored). Required variables:
 | `SANMAR_CUSTOMER_NUMBER` | SanMar numeric customer/account number (sent inside every SOAP request body) |
 | `SANMAR_USERNAME` | SanMar.com web login username used for SOAP API authentication |
 | `SANMAR_PASSWORD` | SanMar.com web login password used for SOAP API authentication |
+| `FIXIE_URL` | Static-IP proxy URL from Fixie (usefixie.com) — required by SanMar, which whitelists a fixed outbound IP. Unset in local dev, where IP whitelisting doesn't apply. |
 | `PRINTAVO_EMAIL` | Printavo API account email |
 | `PRINTAVO_API_TOKEN` | Printavo API token |
 | `NEXTAUTH_SECRET` | Random secret for admin session signing |
@@ -52,6 +53,13 @@ Create `.env.local` in the repo root (git-ignored). Required variables:
 2. Copy `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY` from the Stripe dashboard
 3. Create a webhook endpoint pointing to `https://your-domain.com/api/stripe-webhook` for the `checkout.session.completed` event
 4. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`
+
+### Fixie Setup (SanMar Static IP)
+SanMar's Web Services API whitelists a fixed outbound IP per integration — Vercel's serverless functions have no static IP by default, so SanMar calls are routed through [Fixie](https://usefixie.com), a managed static-IP HTTP proxy.
+1. Sign up at [usefixie.com](https://usefixie.com) (a free tier is available) and copy the connection URL it gives you
+2. Set `FIXIE_URL` in `.env.local` and in Vercel project settings — format: `http://fixie:<token>@<subdomain>.usefixie.com:80`
+3. Fixie's dashboard shows the static IP address(es) your plan uses — give that IP to SanMar's integration team (`sanmarintegrations@sanmar.com`) for whitelisting
+4. `lib/sanmar/soapClient.js` only routes through the proxy when `FIXIE_URL` is set — leave it unset in local dev
 
 To generate a password hash: `node scripts/hash-password.mjs yourpassword`
 
