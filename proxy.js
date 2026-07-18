@@ -17,6 +17,7 @@ const isAdminRoute = createRouteMatcher([
   '/api/printavo-status-update(.*)',
   '/api/orders-partial-state(.*)',
   '/api/ss-catalog-lookup(.*)',
+  '/api/catalog-lookup(.*)',
   '/api/payment-profiles(.*)',
   '/api/search-products(.*)',
   '/api/quote-status-update(.*)',

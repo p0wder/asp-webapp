@@ -38,11 +38,13 @@ export function CartProvider({ children }) {
     [mutate],
   );
   const removeItem = useCallback(
-    (sku, sourceInvoiceId) => mutate(cartLib.removeItem(cartStorage.readCart(), sku, sourceInvoiceId)),
+    (sku, vendor, sourceInvoiceId) =>
+      mutate(cartLib.removeItem(cartStorage.readCart(), sku, vendor, sourceInvoiceId)),
     [mutate],
   );
   const setQty = useCallback(
-    (sku, sourceInvoiceId, qty) => mutate(cartLib.setQty(cartStorage.readCart(), sku, sourceInvoiceId, qty)),
+    (sku, vendor, sourceInvoiceId, qty) =>
+      mutate(cartLib.setQty(cartStorage.readCart(), sku, vendor, sourceInvoiceId, qty)),
     [mutate],
   );
   const clearCart = useCallback(() => mutate(cartLib.clearCart(cartStorage.readCart())), [mutate]);

@@ -52,14 +52,15 @@ function normalizeSizeForMatch(label) {
  * Returns the sizes to render for a line item, plus the target qty the user
  * must allocate across them.
  *
- * - When SS classification matches: SS variants are authoritative. The size
- *   list comes from unique sizeName values across variants, sorted by sizeOrder.
- *   Sizes whose label matches a Printavo bucket (S → S, M → M, …) are pre-filled
- *   from the Printavo counts. The target = sum of all Printavo size counts so
- *   the user re-allocates any qty Printavo bucketed as "Other".
+ * - When classification matches (either vendor): vendor variants are
+ *   authoritative. The size list comes from unique sizeName values across
+ *   variants, sorted by sizeOrder. Sizes whose label matches a Printavo
+ *   bucket (S → S, M → M, …) are pre-filled from the Printavo counts. The
+ *   target = sum of all Printavo size counts so the user re-allocates any
+ *   qty Printavo bucketed as "Other".
  *
- * - When SS lookup is pending / Sanmar / failed: Printavo sizes are used as a
- *   fallback (filtered to sizes with count > 0 plus "Other" if any).
+ * - When lookup is pending / failed: Printavo sizes are used as a fallback
+ *   (filtered to sizes with count > 0 plus "Other" if any).
  *
  * @returns { mode: 'ss'|'printavo', sizes: Array<{ sizeName, sizeOrder, prefillQty }>, targetQty: number }
  */
@@ -118,11 +119,11 @@ function getRowSizes(lineItem, classification) {
 
 // Printavo invoice prices are set at customer-facing rates; we mark up 15% on
 // these invoices, so cost ≈ printavoPrice × 0.85. Used only as a fallback for
-// rows we can't match to an SS variant (Sanmar, pending, failed).
+// rows we can't match to a vendor variant yet (pending, failed).
 const PRINTAVO_MARKUP_INVERSE = 0.85;
 
 /**
- * Compute the unit price + line total a row will cost us (SS Activewear) — not
+ * Compute the unit price + line total a row will cost us — not
  * what we charge the customer. SS variants carry per-size `customerPrice` (the
  * wholesale cost SS quotes us), so we sum qty × price across the sizes actually
  * ordered and surface a range when those sizes span multiple price tiers
@@ -197,7 +198,7 @@ function useLineItemClassification(lineItems) {
       return next;
     });
     try {
-      const res = await fetch('/api/ss-catalog-lookup', {
+      const res = await fetch('/api/catalog-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -250,6 +251,24 @@ function useLineItemClassification(lineItems) {
   return { classifications, retry, reset };
 }
 
+/**
+ * Small always-visible vendor tag — buyers must always be able to see where
+ * a garment will be purchased from, even though S&S Activewear and SanMar
+ * are ordered identically from this point on.
+ */
+function VendorTag({ vendor }) {
+  const label = vendor === 'sanmar' ? 'SanMar' : 'S&S';
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide"
+      style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+      title={vendor === 'sanmar' ? 'Purchased from SanMar' : 'Purchased from S&S Activewear'}
+    >
+      {label}
+    </span>
+  );
+}
+
 function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabledReason }) {
   const [justAdded, setJustAdded] = useState(0);
   const state = result?.state || 'pending';
@@ -265,46 +284,37 @@ function SourcingCell({ lineItem, result, onAddToCart, onRetry, disabled, disabl
   if (state === 'matched') {
     if (justAdded > 0) {
       return (
-        <span className="inline-flex items-center text-xs font-semibold text-green-600 dark:text-green-400">
-          ✓ Added {justAdded}
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-600 dark:text-green-400">
+          ✓ Added {justAdded} <VendorTag vendor={result.vendor} />
         </span>
       );
     }
     return (
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          if (disabled) return;
-          const n = onAddToCart(lineItem, result.variants);
-          if (n > 0) {
-            setJustAdded(n);
-            setTimeout(() => setJustAdded(0), 2000);
-          }
-        }}
-        className="px-3 py-2 sm:py-1 rounded-md text-xs font-semibold transition-opacity"
-        style={{
-          background: disabled ? 'var(--surface)' : 'var(--accent)',
-          color: disabled ? 'var(--muted)' : '#fff',
-          border: disabled ? '1px solid var(--border)' : 'none',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.7 : 1,
-        }}
-        title={disabled ? (disabledReason || 'Not ready') : undefined}
-      >
-        + Add to Cart
-      </button>
-    );
-  }
-
-  if (state === 'sanmar') {
-    return (
-      <span
-        className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}
-        title="Auto-routed to Sanmar — no manual action required"
-      >
-        Sanmar – Auto Order
+      <span className="inline-flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            if (disabled) return;
+            const n = onAddToCart(lineItem, result.variants, result.vendor);
+            if (n > 0) {
+              setJustAdded(n);
+              setTimeout(() => setJustAdded(0), 2000);
+            }
+          }}
+          className="px-3 py-2 sm:py-1 rounded-md text-xs font-semibold transition-opacity"
+          style={{
+            background: disabled ? 'var(--surface)' : 'var(--accent)',
+            color: disabled ? 'var(--muted)' : '#fff',
+            border: disabled ? '1px solid var(--border)' : 'none',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.7 : 1,
+          }}
+          title={disabled ? (disabledReason || 'Not ready') : undefined}
+        >
+          + Add to Cart
+        </button>
+        <VendorTag vendor={result.vendor} />
       </span>
     );
   }
@@ -607,20 +617,16 @@ function OrderOverview({ lineItemGroups, classifications, onAddToCart, onRetry }
 }
 
 /**
- * Maps a per-line-item SS classification entry to the `source` value the
- * `/api/orders-partial-state` contract expects.
- *
- *  - `matched`             → 'ss-activewear'  (SS Activewear catalog hit)
- *  - `sanmar` | `no-match` → 'sanmar'         (auto-routed / no SS hit)
- *  - `pending` | `failed`  → 'unresolved-lookup'
+ * Maps a per-line-item cross-vendor classification entry to the `source`
+ * value the `/api/orders-partial-state` contract expects. `vendor` is set
+ * directly by `/api/catalog-lookup` for any `matched` result, so this is
+ * mostly a passthrough — `pending`/`failed` collapse to 'unresolved-lookup'.
  *
  * Callers should skip invoices that have any `pending` classification so the
  * server isn't asked to evaluate before lookups settle.
  */
 function classificationToSource(classification) {
-  const s = classification?.state;
-  if (s === 'matched') return 'ss-activewear';
-  if (s === 'sanmar' || s === 'no-match') return 'sanmar';
+  if (classification?.state === 'matched') return classification.vendor || 'unresolved-lookup';
   return 'unresolved-lookup';
 }
 
@@ -640,8 +646,8 @@ function PartialDrilldown({ summary }) {
   }
 
   const sourceLabel = (src) => {
-    if (src === 'ss-activewear') return 'SS Activewear';
-    if (src === 'sanmar') return 'Sanmar — Auto Order';
+    if (src === 'ss-activewear') return 'S&S Activewear';
+    if (src === 'sanmar') return 'SanMar';
     return 'Lookup pending';
   };
 
@@ -734,7 +740,7 @@ function InvoiceCard({ invoice, classifications, partialState, onRetryPartialSta
   const [partialOpen, setPartialOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const onAddToCartBound = useCallback(
-    (lineItem, variants) => onAddToCart(invoice, lineItem, variants),
+    (lineItem, variants, vendor) => onAddToCart(invoice, lineItem, variants, vendor),
     [invoice, onAddToCart],
   );
 
@@ -1133,7 +1139,7 @@ export default function OrdersPage() {
   const cartTotals = totals(cart);
 
   const handleAddToCart = useCallback(
-    (invoice, lineItem, variants) => {
+    (invoice, lineItem, variants, vendor) => {
       let added = 0;
       const allocations = lineItem.sizeAllocations || {};
 
@@ -1148,11 +1154,12 @@ export default function OrdersPage() {
         if (!(qty > 0)) continue;
         const variant = findVariant(sizeName);
         if (!variant) {
-          console.warn('[orders] no SS variant for', lineItem.itemNumber, sizeName, lineItem.color);
+          console.warn('[orders] no vendor variant for', lineItem.itemNumber, sizeName, lineItem.color);
           continue;
         }
         addItem({
           sku: variant.sku,
+          vendor,
           styleNumber: lineItem.itemNumber,
           styleName: variant.styleName,
           brandName: variant.brandName,
@@ -1258,7 +1265,7 @@ export default function OrdersPage() {
             Ready to Order
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-            Invoices awaiting garment ordering from S&amp;S Activewear
+            Invoices awaiting garment ordering — sourced from S&amp;S Activewear or SanMar per line item
           </p>
         </div>
         <button

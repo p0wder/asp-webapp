@@ -8,6 +8,18 @@ function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount ?? 0);
 }
 
+function VendorBadge({ vendor }) {
+  const label = vendor === 'sanmar' ? 'SanMar' : 'S&S Activewear';
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
+      style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function CartPage() {
   const { cart, removeItem, setQty } = useCart();
   const { itemCount, lineCount, grandTotal } = totals(cart);
@@ -20,7 +32,7 @@ export default function CartPage() {
           Your cart is empty
         </h1>
         <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>
-          Add items from the orders page to build a consolidated SS Activewear order.
+          Add items from the orders page to build a consolidated order.
         </p>
         <Link
           href="/purchasing"
@@ -57,26 +69,29 @@ export default function CartPage() {
         className="rounded-lg px-4 py-3 mb-4 text-sm"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}
       >
-        💡 <strong style={{ color: 'var(--foreground)' }}>Wholesale pricing</strong> — Unit prices shown are your S&amp;S Activewear cost to purchase the blank garments. These are not the prices charged to your customer.
+        💡 <strong style={{ color: 'var(--foreground)' }}>Wholesale pricing</strong> — Unit prices shown are your vendor cost to purchase the blank garments (S&amp;S Activewear or SanMar, per item). These are not the prices charged to your customer.
       </div>
 
       <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
         {cart.items.map((item, idx) => (
           <div
-            key={item.sku}
+            key={`${item.vendor}-${item.sku}-${item.sourceInvoiceId}`}
             className="px-4 py-4 flex flex-col gap-2"
             style={{ borderBottom: idx < cart.items.length - 1 ? '1px solid var(--border)' : 'none' }}
           >
             {/* Top row: item info + remove */}
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="font-medium text-sm">{item.brandName} {item.styleNumber}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-medium text-sm">{item.brandName} {item.styleNumber}</div>
+                  <VendorBadge vendor={item.vendor} />
+                </div>
                 <div className="text-xs" style={{ color: 'var(--muted)' }}>{item.styleName}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>From invoice #{item.sourceInvoiceVisualId}</div>
               </div>
               <button
                 type="button"
-                onClick={() => removeItem(item.sku, item.sourceInvoiceId)}
+                onClick={() => removeItem(item.sku, item.vendor, item.sourceInvoiceId)}
                 aria-label={`Remove ${item.sku}`}
                 className="text-sm hover:text-red-600 transition-colors flex-shrink-0"
                 style={{ color: 'var(--muted)' }}
@@ -95,7 +110,7 @@ export default function CartPage() {
                   type="number"
                   min="1"
                   value={item.qty}
-                  onChange={(e) => setQty(item.sku, item.sourceInvoiceId, parseInt(e.target.value, 10) || 0)}
+                  onChange={(e) => setQty(item.sku, item.vendor, item.sourceInvoiceId, parseInt(e.target.value, 10) || 0)}
                   className="w-16 px-2 py-1 rounded border text-center text-sm"
                   style={{ background: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
                 />

@@ -156,11 +156,17 @@ async function resolveInvoice(invoiceReq, flags) {
     try {
       const { orders: ssOrders, rateLimit } = await getSSOrdersByPO(visualId);
       rateLimitRemaining = rateLimit?.remaining ?? null;
-      // Cross-check: exclude any local record whose ssOrderRef is NOT present
-      // in the SS response (e.g., canceled in SS UI).
-      survivingRecords = records.filter((rec) =>
-        ssOrders.some((order) => ssOrderMatchesRef(rec.ssOrderRef, order)),
-      );
+      // Cross-check: exclude any local S&S-vendor record whose ssOrderRef is
+      // NOT present in the SS response (e.g., canceled in SS UI). SanMar (or
+      // any other non-SS vendor) records can never appear in SS's order
+      // history, so they're passed through unfiltered rather than being
+      // silently dropped — otherwise fully-ordered SanMar lines would look
+      // like they were never ordered. `rec.vendor` is undefined on legacy
+      // pre-vendor-field records, which are treated as S&S for compatibility.
+      survivingRecords = records.filter((rec) => {
+        if (rec.vendor && rec.vendor !== 'ss-activewear') return true;
+        return ssOrders.some((order) => ssOrderMatchesRef(rec.ssOrderRef, order));
+      });
     } catch (err) {
       console.error(`[orders-partial-state] derivation failed for invoice ${visualId}: ss-history-lookup-failed (${err?.message || err})`);
       return {

@@ -10,9 +10,10 @@ function formatCurrency(amount) {
 }
 
 /**
- * Build the input to /api/ss-catalog-lookup from cart items, deduplicating by (style, color).
+ * Build the input to /api/catalog-lookup from cart items, deduplicating by (style, color).
  * The lineItemId we send is `${styleNumber}|${color}` since these lookups aren't per Printavo
- * line item — they're per cart-item style/color group.
+ * line item — they're per cart-item style/color group. Works across vendors: catalog-lookup
+ * tries S&S first, then SanMar, so a cart item's original vendor doesn't need to be specified.
  */
 function buildStockLookupItems(cartItems) {
   const seen = new Map();
@@ -34,6 +35,62 @@ function ProfileIcon({ type }) {
   if (type === 'Card') return <span>💳</span>;
   if (type === 'Bank') return <span>🏦</span>;
   return <span>💰</span>;
+}
+
+function VendorBadge({ vendor }) {
+  const label = vendor === 'sanmar' ? 'SanMar' : 'S&S Activewear';
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
+      style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+    >
+      {label}
+    </span>
+  );
+}
+
+const SANMAR_SHIP_METHODS = ['UPS', 'UPS 2ND DAY', 'UPS 3RD DAY', 'FEDEX'];
+
+/**
+ * SanMar's submitPO requires a distinct ship-to shape from S&S Activewear's
+ * account-level shippingAddress (attention/department/residence/shipEmail
+ * fields S&S doesn't have) — this is a real form, not a copy of the S&S flow.
+ */
+function SanmarShipToForm({ value, onChange }) {
+  const set = (field) => (e) => onChange({ ...value, [field]: e.target.value });
+  const inputClass = 'w-full px-3 py-2 rounded-md border text-sm';
+  const inputStyle = { background: 'var(--background)', borderColor: 'var(--border)', color: 'var(--foreground)' };
+  return (
+    <div className="mt-6 rounded-xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+      <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--foreground)' }}>
+        SanMar Ship-To
+      </h3>
+      <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
+        Required for the SanMar portion of this order — SanMar ships and invoices separately from S&amp;S Activewear.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input placeholder="Attention (optional)" value={value.attention || ''} onChange={set('attention')} className={inputClass} style={inputStyle} />
+        <input placeholder="Company / Ship To (optional)" value={value.shipTo || ''} onChange={set('shipTo')} className={inputClass} style={inputStyle} />
+        <input placeholder="Address line 1" value={value.shipAddress1 || ''} onChange={set('shipAddress1')} className={inputClass} style={inputStyle} required />
+        <input placeholder="Address line 2 (optional)" value={value.shipAddress2 || ''} onChange={set('shipAddress2')} className={inputClass} style={inputStyle} />
+        <input placeholder="City" value={value.shipCity || ''} onChange={set('shipCity')} className={inputClass} style={inputStyle} required />
+        <input placeholder="State (e.g. NC)" value={value.shipState || ''} onChange={set('shipState')} className={inputClass} style={inputStyle} maxLength={2} required />
+        <input placeholder="Zip" value={value.shipZip || ''} onChange={set('shipZip')} className={inputClass} style={inputStyle} required />
+        <select value={value.shipMethod || 'UPS'} onChange={set('shipMethod')} className={inputClass} style={inputStyle}>
+          {SANMAR_SHIP_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <input placeholder="Notification email (optional)" value={value.shipEmail || ''} onChange={set('shipEmail')} className={inputClass} style={inputStyle} />
+        <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
+          <input type="checkbox" checked={value.residence === 'Y'} onChange={(e) => onChange({ ...value, residence: e.target.checked ? 'Y' : 'N' })} />
+          Residential address
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function sanmarShipToIsComplete(shipTo) {
+  return Boolean(shipTo.shipAddress1 && shipTo.shipCity && shipTo.shipState && shipTo.shipZip);
 }
 
 /**
@@ -68,9 +125,9 @@ function PartialItemsTable({ visualId, summary }) {
               <td className="px-3 py-2">{li.description}</td>
               <td className="px-3 py-2">
                 {li.source === 'ss-activewear'
-                  ? 'SS Activewear'
+                  ? 'S&S Activewear'
                   : li.source === 'sanmar'
-                    ? 'Sanmar — Auto Order'
+                    ? 'SanMar'
                     : 'Lookup pending'}
               </td>
               <td className="px-3 py-2 text-right font-mono">{li.alreadyOrdered ?? 0}</td>
@@ -147,16 +204,24 @@ export default function CheckoutPage() {
   const { cart, removeItem, setQty, clearCart } = useCart();
   const { itemCount, lineCount, grandTotal } = totals(cart);
   const groups = useMemo(() => groupByInvoice(cart), [cart]);
+  const hasSS = useMemo(() => cart.items.some((i) => i.vendor === 'ss-activewear'), [cart.items]);
+  const hasSanmar = useMemo(() => cart.items.some((i) => i.vendor === 'sanmar'), [cart.items]);
 
   // Stock map: sku → availableQty
   const [stockMap, setStockMap] = useState(() => new Map());
   const [stockState, setStockState] = useState('idle'); // idle | loading | ready | error
   const [stockError, setStockError] = useState(null);
 
-  // Payment profiles
+  // Payment profiles (S&S Activewear only — SanMar bills direct to account, no per-order profile)
   const [profiles, setProfiles] = useState([]);
   const [profilesState, setProfilesState] = useState('idle'); // idle | loading | ready | error
   const [selectedProfileId, setSelectedProfileId] = useState(null);
+
+  // SanMar ship-to (required only when the cart has ≥1 SanMar row)
+  const [sanmarShipTo, setSanmarShipTo] = useState({
+    attention: '', shipTo: '', shipAddress1: '', shipAddress2: '',
+    shipCity: '', shipState: '', shipZip: '', shipMethod: 'UPS', shipEmail: '', residence: 'N',
+  });
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -268,9 +333,9 @@ export default function CheckoutPage() {
     [lookupItems],
   );
 
-  // Fetch payment profiles on mount
+  // Fetch payment profiles on mount (only needed when the cart has S&S Activewear rows)
   useEffect(() => {
-    if (confirmation) return;
+    if (confirmation || !hasSS) return;
     setProfilesState('loading');
     fetch('/api/payment-profiles')
       .then((r) => r.json())
@@ -288,9 +353,11 @@ export default function CheckoutPage() {
         setProfilesState('error');
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [confirmation]);
+  }, [confirmation, hasSS]);
 
-  // Re-query SS Activewear on mount to refresh stock for cart items
+  // Re-query current stock (both vendors — /api/catalog-lookup routes S&S
+  // first, then SanMar, so vendor doesn't need to be specified here) on
+  // mount to refresh stock for cart items.
   useEffect(() => {
     if (lookupItems.length === 0 || confirmation) {
       setStockState('idle');
@@ -302,7 +369,7 @@ export default function CheckoutPage() {
 
     (async () => {
       try {
-        const res = await fetch('/api/ss-catalog-lookup', {
+        const res = await fetch('/api/catalog-lookup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: lookupItems }),
@@ -333,8 +400,12 @@ export default function CheckoutPage() {
 
   async function handlePlaceOrder() {
     if (submitting || cart.items.length === 0) return;
-    if (!selectedProfileId) {
+    if (hasSS && !selectedProfileId) {
       alert('Please select a payment method before placing your order.');
+      return;
+    }
+    if (hasSanmar && !sanmarShipToIsComplete(sanmarShipTo)) {
+      alert('Please fill in the SanMar ship-to address before placing your order.');
       return;
     }
     setSubmitting(true);
@@ -344,14 +415,19 @@ export default function CheckoutPage() {
     const payload = {
       lines: cart.items.map((i) => ({
         identifier: i.sku,
+        vendor: i.vendor,
         qty: i.qty,
+        styleNumber: i.styleNumber,
+        color: i.color,
+        size: i.size,
         sourceInvoiceId: i.sourceInvoiceId,
         sourceInvoiceVisualId: i.sourceInvoiceVisualId,
         sourceLineItemId: i.sourceLineItemId,
       })),
       poNumber: uniqueInvoices.join(', '),
       comments: `Consolidated from invoices: ${uniqueInvoices.join(', ')}`,
-      paymentProfileId: selectedProfileId,
+      ...(hasSS ? { paymentProfileId: selectedProfileId } : {}),
+      ...(hasSanmar ? { sanmarShipTo } : {}),
     };
 
     try {
@@ -373,40 +449,75 @@ export default function CheckoutPage() {
 
   // Confirmation panel (US1 + US2)
   if (confirmation) {
-    const ssOrder = confirmation.ssOrder || {};
+    const ssOrder = confirmation.ssOrder || null;
+    const sanmarOrder = confirmation.sanmarOrder || null;
     const perInvoice = confirmation.perInvoice || [];
-    const attribution = confirmation.attributionRecord || {};
+    const attributionRecords = confirmation.attributionRecords || [];
+    const errors = confirmation.errors || {};
+    const bothVendorsSucceeded = ssOrder && sanmarOrder;
     return (
       <div className="max-w-4xl mx-auto px-4 py-16">
         <div className="rounded-xl border p-8" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <div className="text-5xl mb-4">✓</div>
           <h1 className="text-2xl font-bold mb-2 text-green-600 dark:text-green-400">
-            Order submitted to SS Activewear
+            {bothVendorsSucceeded
+              ? 'Order submitted to S&S Activewear and SanMar'
+              : ssOrder
+                ? 'Order submitted to S&S Activewear'
+                : 'Order submitted to SanMar'}
           </h1>
           <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>
             Your consolidated order has been placed. Confirmation email sent to aspmerch@gmail.com and gramigscott@gmail.com.
           </p>
-          {(ssOrder.orderNum || ssOrder.poNumber || ssOrder.invoiceNumber) && (
-            <dl className="grid grid-cols-2 gap-3 text-sm mb-6">
-              {ssOrder.orderNum != null && (
-                <>
-                  <dt style={{ color: 'var(--muted)' }}>Order #</dt>
-                  <dd className="font-mono">{ssOrder.orderNum}</dd>
-                </>
-              )}
-              {ssOrder.poNumber && (
-                <>
-                  <dt style={{ color: 'var(--muted)' }}>PO #</dt>
-                  <dd className="font-mono">{ssOrder.poNumber}</dd>
-                </>
-              )}
-              {ssOrder.invoiceNumber && (
-                <>
-                  <dt style={{ color: 'var(--muted)' }}>Invoice #</dt>
-                  <dd className="font-mono">{ssOrder.invoiceNumber}</dd>
-                </>
-              )}
-            </dl>
+
+          {errors.ss && (
+            <div className="mb-4 p-3 rounded-lg border border-red-500 bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">
+              <div className="font-semibold mb-1">S&amp;S Activewear submission failed</div>
+              <div>{errors.ss}</div>
+            </div>
+          )}
+          {errors.sanmar && (
+            <div className="mb-4 p-3 rounded-lg border border-red-500 bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300">
+              <div className="font-semibold mb-1">SanMar submission failed</div>
+              <div>{errors.sanmar}</div>
+            </div>
+          )}
+
+          {ssOrder && (ssOrder.orderNum || ssOrder.poNumber || ssOrder.invoiceNumber) && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <VendorBadge vendor="ss-activewear" />
+              </div>
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                {ssOrder.orderNum != null && (
+                  <>
+                    <dt style={{ color: 'var(--muted)' }}>Order #</dt>
+                    <dd className="font-mono">{ssOrder.orderNum}</dd>
+                  </>
+                )}
+                {ssOrder.poNumber && (
+                  <>
+                    <dt style={{ color: 'var(--muted)' }}>PO #</dt>
+                    <dd className="font-mono">{ssOrder.poNumber}</dd>
+                  </>
+                )}
+                {ssOrder.invoiceNumber && (
+                  <>
+                    <dt style={{ color: 'var(--muted)' }}>Invoice #</dt>
+                    <dd className="font-mono">{ssOrder.invoiceNumber}</dd>
+                  </>
+                )}
+              </dl>
+            </div>
+          )}
+
+          {sanmarOrder && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <VendorBadge vendor="sanmar" />
+              </div>
+              <p className="text-sm">{sanmarOrder.message || 'PO Submission successful'}</p>
+            </div>
           )}
 
           {perInvoice.length > 0 && (
@@ -430,9 +541,10 @@ export default function CheckoutPage() {
                   </li>
                 ))}
               </ul>
-              {attribution.writeOk === false && (
+              {attributionRecords.some((r) => r.writeOk === false) && (
                 <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠ Attribution record write failed: {attribution.writeError}. Future partial-state derivation for these invoices may show &ldquo;unavailable&rdquo; until this is corrected.
+                  ⚠ Attribution record write failed for: {attributionRecords.filter((r) => !r.writeOk).map((r) => r.vendor).join(', ')}.
+                  {' '}Future partial-state derivation for these invoices may show &ldquo;unavailable&rdquo; until this is corrected.
                 </p>
               )}
             </section>
@@ -507,7 +619,7 @@ export default function CheckoutPage() {
             Pre-Checkout Summary
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-            Review your consolidated order before submitting to SS Activewear.
+            Review your consolidated order before submitting to S&amp;S Activewear and/or SanMar.
           </p>
         </div>
         <Link href="/purchasing/cart" className="text-sm font-medium hover:underline" style={{ color: 'var(--muted)' }}>
@@ -517,12 +629,12 @@ export default function CheckoutPage() {
 
       {stockState === 'loading' && (
         <div className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
-          ⟳ Checking stock at SS Activewear…
+          ⟳ Checking current stock…
         </div>
       )}
       {stockState === 'error' && (
         <div className="text-xs mb-4 text-amber-600 dark:text-amber-400">
-          ⚠ Couldn&apos;t refresh stock ({stockError}). Submission still allowed; SS Activewear will report shortages on its end.
+          ⚠ Couldn&apos;t refresh stock ({stockError}). Submission still allowed; the vendor will report shortages on their end.
         </div>
       )}
 
@@ -545,9 +657,12 @@ export default function CheckoutPage() {
                       : null;
 
                   return (
-                    <tr key={item.sku} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <tr key={`${item.vendor}-${item.sku}`} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td className="py-3 px-5">
-                        <div className="font-medium text-sm">{item.brandName} {item.styleNumber} — {item.size} / {item.color}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-sm">{item.brandName} {item.styleNumber} — {item.size} / {item.color}</div>
+                          <VendorBadge vendor={item.vendor} />
+                        </div>
                         <div className="text-xs" style={{ color: 'var(--muted)' }}>{item.styleName}</div>
                         {shortage && (
                           <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200">
@@ -556,7 +671,7 @@ export default function CheckoutPage() {
                               : `⚠ Only ${shortage.available} available (requested ${item.qty})`}
                             <button
                               type="button"
-                              onClick={() => setQty(item.sku, item.sourceInvoiceId, shortage.available)}
+                              onClick={() => setQty(item.sku, item.vendor, item.sourceInvoiceId, shortage.available)}
                               disabled={shortage.severity === 'out-of-stock'}
                               className="px-2 py-0.5 rounded bg-amber-600 text-white text-[10px] font-semibold disabled:opacity-50"
                             >
@@ -564,7 +679,7 @@ export default function CheckoutPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => removeItem(item.sku, item.sourceInvoiceId)}
+                              onClick={() => removeItem(item.sku, item.vendor, item.sourceInvoiceId)}
                               className="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] font-semibold"
                             >
                               Remove
@@ -590,50 +705,54 @@ export default function CheckoutPage() {
         ))}
       </div>
 
-      {/* Payment method selector */}
-      <div className="mt-6 rounded-xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-        <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--foreground)' }}>
-          Payment Method
-        </h3>
-        {profilesState === 'loading' && (
-          <div className="text-xs" style={{ color: 'var(--muted)' }}>⟳ Loading payment methods…</div>
-        )}
-        {profilesState === 'error' && (
-          <div className="text-xs text-red-600 dark:text-red-400">
-            ⚠ Could not load payment methods. Please refresh and try again.
-          </div>
-        )}
-        {profilesState === 'ready' && profiles.length === 0 && (
-          <div className="text-xs text-amber-600 dark:text-amber-400">
-            ⚠ No payment methods found on your S&amp;S Activewear account. Please add a credit card or bank account at ssactivewear.com.
-          </div>
-        )}
-        {profilesState === 'ready' && profiles.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {profiles.map((profile) => (
-              <label
-                key={profile.profileID}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors"
-                style={{
-                  borderColor: selectedProfileId === profile.profileID ? 'var(--accent)' : 'var(--border)',
-                  background: selectedProfileId === profile.profileID ? 'color-mix(in srgb, var(--accent) 8%, var(--surface))' : 'var(--surface)',
-                }}
-              >
-                <input
-                  type="radio"
-                  name="paymentProfile"
-                  value={profile.profileID}
-                  checked={selectedProfileId === profile.profileID}
-                  onChange={() => setSelectedProfileId(profile.profileID)}
-                  className="accent-[var(--accent)]"
-                />
-                <ProfileIcon type={profile.profileType} />
-                <span className="text-sm" style={{ color: 'var(--foreground)' }}>{profile.name}</span>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Payment method selector — S&S Activewear only; SanMar bills direct to account */}
+      {hasSS && (
+        <div className="mt-6 rounded-xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <h3 className="font-semibold text-sm mb-3" style={{ color: 'var(--foreground)' }}>
+            S&amp;S Activewear Payment Method
+          </h3>
+          {profilesState === 'loading' && (
+            <div className="text-xs" style={{ color: 'var(--muted)' }}>⟳ Loading payment methods…</div>
+          )}
+          {profilesState === 'error' && (
+            <div className="text-xs text-red-600 dark:text-red-400">
+              ⚠ Could not load payment methods. Please refresh and try again.
+            </div>
+          )}
+          {profilesState === 'ready' && profiles.length === 0 && (
+            <div className="text-xs text-amber-600 dark:text-amber-400">
+              ⚠ No payment methods found on your S&amp;S Activewear account. Please add a credit card or bank account at ssactivewear.com.
+            </div>
+          )}
+          {profilesState === 'ready' && profiles.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {profiles.map((profile) => (
+                <label
+                  key={profile.profileID}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors"
+                  style={{
+                    borderColor: selectedProfileId === profile.profileID ? 'var(--accent)' : 'var(--border)',
+                    background: selectedProfileId === profile.profileID ? 'color-mix(in srgb, var(--accent) 8%, var(--surface))' : 'var(--surface)',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="paymentProfile"
+                    value={profile.profileID}
+                    checked={selectedProfileId === profile.profileID}
+                    onChange={() => setSelectedProfileId(profile.profileID)}
+                    className="accent-[var(--accent)]"
+                  />
+                  <ProfileIcon type={profile.profileType} />
+                  <span className="text-sm" style={{ color: 'var(--foreground)' }}>{profile.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasSanmar && <SanmarShipToForm value={sanmarShipTo} onChange={setSanmarShipTo} />}
 
       <div className="mt-6 rounded-xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between mb-4">
@@ -658,18 +777,29 @@ export default function CheckoutPage() {
         <button
           type="button"
           onClick={handlePlaceOrder}
-          disabled={submitting || !selectedProfileId || profilesState !== 'ready'}
+          disabled={
+            submitting ||
+            (hasSS && (!selectedProfileId || profilesState !== 'ready')) ||
+            (hasSanmar && !sanmarShipToIsComplete(sanmarShipTo))
+          }
           className="w-full px-6 py-4 rounded-lg font-bold text-base transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: 'var(--accent)', color: '#fff' }}
         >
-          {submitting ? 'Submitting to SS Activewear…' : 'Place Order'}
+          {submitting ? 'Submitting…' : 'Place Order'}
         </button>
         <p className="mt-3 text-xs text-center" style={{ color: 'var(--muted)' }}>
-          Total shown is garment cost only — shipping, surcharges, and taxes will be calculated by SS Activewear and reflected on their invoice.
+          Total shown is garment cost only — shipping, surcharges, and taxes will be calculated by each vendor and reflected on their invoice.
         </p>
-        <p className="mt-1 text-xs text-center" style={{ color: 'var(--muted)' }}>
-          ⚠ Test mode: <code>testOrder: true</code> is hardcoded — no real charge will occur.
-        </p>
+        {hasSS && (
+          <p className="mt-1 text-xs text-center" style={{ color: 'var(--muted)' }}>
+            ⚠ S&amp;S Activewear test mode: <code>testOrder: true</code> is hardcoded — no real charge will occur.
+          </p>
+        )}
+        {hasSanmar && (
+          <p className="mt-1 text-xs text-center" style={{ color: 'var(--muted)' }}>
+            ⚠ SanMar stage mode: <code>SANMAR_ENDPOINT_MODE = &apos;stage&apos;</code> is hardcoded — this submits to SanMar&apos;s test environment, not production.
+          </p>
+        )}
       </div>
     </div>
   );
