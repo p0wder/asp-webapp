@@ -668,7 +668,7 @@ export default function CheckoutPage() {
           Total shown is garment cost only — shipping, surcharges, and taxes will be calculated by SS Activewear and reflected on their invoice.
         </p>
         <p className="mt-1 text-xs text-center" style={{ color: 'var(--muted)' }}>
-          ⚠ Test mode: <code>testOrder: true</code> is hardcoded — no real charge will occur.
+          ⚠ Live order: this will be charged and shipped for real by SS Activewear.
         </p>
       </div>
     </div>
