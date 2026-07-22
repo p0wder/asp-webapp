@@ -76,7 +76,7 @@ export async function POST(request) {
   }
 
   console.log(
-    '[place-order] Submitting order (testOrder=true):',
+    '[place-order] Submitting order (testOrder=false, LIVE):',
     JSON.stringify({ poNumber, lineCount: lines.length, paymentProfileId }, null, 2),
   );
 
