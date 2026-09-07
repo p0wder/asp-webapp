@@ -47,7 +47,7 @@ Live S&S Activewear order submission is gated by two independent switches.
 | Gate | Where | Purpose |
 |---|---|---|
 | `SS_LIVE_ORDERS_CODE_GATE` | `lib/ssOrderingGate.js` | In-code constant. Closing it requires a reviewable code edit and cannot be undone by an environment change. |
-| `SS_ORDERING_ENABLED` | Environment | The owner's immediate stop. Flip it in Vercel project settings — no deploy needed. |
+| `SS_ORDERING_ENABLED` | Environment | The owner's stop. Change it in Vercel project settings — no code change, review or merge needed. |
 
 **The switch is fail-closed.** Only the exact string `true` (case-insensitive,
 trimmed) permits ordering. A missing, empty or unrecognised value blocks it.
@@ -56,9 +56,19 @@ trimmed) permits ordering. A missing, empty or unrecognised value blocks it.
 > will stop.** This is intentional — ambiguous configuration must never resolve
 > toward placing a real supplier order.
 
-**To stop live ordering immediately:** set `SS_ORDERING_ENABLED=false` in Vercel
-project settings and redeploy (or wait for the next request — the value is read
-per-request, not cached at build time).
+**To stop live ordering:** set `SS_ORDERING_ENABLED=false` in Vercel project
+settings, **then redeploy**.
+
+> Vercel binds environment variables to a deployment. Changing the value in the
+> dashboard does **not** affect the deployment already running — a redeploy is
+> required for it to take effect. Use "Redeploy" on the current production
+> deployment; no rebuild of your branch is needed.
+
+This is still far faster than a code change (no edit, review or merge), but it
+is not instantaneous — budget a minute or two for the redeploy. If you need
+ordering stopped faster than that, remove the S&S credentials
+(`SS_ACTIVEWEAR_USERNAME` / `SS_ACTIVEWEAR_PASSWORD`) as well, which fails the
+adapter closed on the same redeploy.
 
 `POST /api/place-order` then returns `503` with:
 
