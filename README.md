@@ -20,6 +20,7 @@ Create `.env.local` in the repo root (git-ignored). Required variables:
 |---|---|
 | `SS_ACTIVEWEAR_USERNAME` | SS Activewear dealer account username |
 | `SS_ACTIVEWEAR_PASSWORD` | SS Activewear dealer account password |
+| `SS_ORDERING_ENABLED` | **Kill switch for live S&S order submission.** Must be exactly `true` to permit orders. Missing, empty or any other value blocks submission — see [S&S Ordering Kill Switch](#ss-ordering-kill-switch) |
 | `PRINTAVO_EMAIL` | Printavo API account email |
 | `PRINTAVO_API_TOKEN` | Printavo API token |
 | `NEXTAUTH_SECRET` | Random secret for admin session signing |
@@ -37,6 +38,43 @@ Create `.env.local` in the repo root (git-ignored). Required variables:
 | *(none required)* | Lead Inbox scanner uses RunSignup's public API — no key needed |
 | `EVENTBRITE_LOCATION` | Default search location for the weekly cron scan, e.g. `Charlotte, NC` or a zip code (can be overridden per-scan in the UI) |
 | `CRON_SECRET` | Random secret for authenticating Vercel cron requests to `/api/cron/refresh-leads` |
+
+### S&S Ordering Kill Switch
+
+Live S&S Activewear order submission is gated by two independent switches.
+**Both** must be open for a real order to be placed; either one closes it.
+
+| Gate | Where | Purpose |
+|---|---|---|
+| `SS_LIVE_ORDERS_CODE_GATE` | `lib/ssOrderingGate.js` | In-code constant. Closing it requires a reviewable code edit and cannot be undone by an environment change. |
+| `SS_ORDERING_ENABLED` | Environment | The owner's immediate stop. Flip it in Vercel project settings — no deploy needed. |
+
+**The switch is fail-closed.** Only the exact string `true` (case-insensitive,
+trimmed) permits ordering. A missing, empty or unrecognised value blocks it.
+
+> ⚠️ **Deployers: set `SS_ORDERING_ENABLED=true` in Vercel, or live ordering
+> will stop.** This is intentional — ambiguous configuration must never resolve
+> toward placing a real supplier order.
+
+**To stop live ordering immediately:** set `SS_ORDERING_ENABLED=false` in Vercel
+project settings and redeploy (or wait for the next request — the value is read
+per-request, not cached at build time).
+
+`POST /api/place-order` then returns `503` with:
+
+```json
+{ "error": "S&S ordering is currently disabled. No order was submitted.",
+  "code": "SS_ORDERING_DISABLED",
+  "reason": "DISABLED_BY_OWNER" }
+```
+
+`reason` is one of `CONFIG_MISSING`, `CONFIG_INVALID`, `DISABLED_BY_OWNER`, or
+`CODE_GATE_CLOSED`.
+
+**What keeps working while ordering is disabled:** all S&S read, catalog,
+status and reconciliation paths — including `getSSOrdersByPO`, the purchasing
+catalog lookup, and `/api/orders-partial-state`. Only order *submission* is
+blocked, so open orders can still be tracked and reconciled.
 
 ### Clerk Setup (Customer Accounts)
 1. Go to [vercel.com/marketplace](https://vercel.com/marketplace) and add the **Clerk** integration to your project
