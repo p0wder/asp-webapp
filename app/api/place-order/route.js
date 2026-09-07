@@ -2,6 +2,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
 import { placeOrderChain } from '@/lib/placeOrderChain';
+import { getSSOrderingState } from '@/lib/ssOrderingSwitch';
 
 /**
  * POST /api/place-order
@@ -25,11 +26,35 @@ import { placeOrderChain } from '@/lib/placeOrderChain';
  * }
  *
  * Response shape: see `.specify/specs/002-printavo-order-notification/contracts/place-order.md`.
+ *
+ * Returns 503 `{ error, code: 'SS_ORDERING_DISABLED', reason }` when the S&S
+ * kill switch is closed (TG-001-02) — no supplier or Printavo call is made.
+ * See the "S&S Ordering Kill Switch" section in README.md.
  */
 export async function POST(request) {
   const isAdmin = await requireAdmin();
   if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // ── Kill switch (TG-001-02) ─────────────────────────────────────────────
+  // Checked before body validation and before any delegation, so a disabled
+  // switch reaches neither S&S nor Printavo. `createSSOrder` enforces the same
+  // gate independently; this layer exists to give callers a stable HTTP
+  // contract instead of a 500 from a thrown adapter error.
+  const ssOrdering = getSSOrderingState();
+  if (!ssOrdering.allowed) {
+    console.warn('[place-order] Rejected: S&S ordering disabled', {
+      reason: ssOrdering.reason,
+    });
+    return NextResponse.json(
+      {
+        error: 'S&S ordering is currently disabled. No order was submitted.',
+        code: 'SS_ORDERING_DISABLED',
+        reason: ssOrdering.reason,
+      },
+      { status: 503 },
+    );
   }
 
   let body;

@@ -1,6 +1,31 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.1.0 → 1.2.0
+Bump rationale: MINOR — Principle VI materially expanded with new MUSTs
+(mandatory fail-closed runtime kill switch on live side-effect paths;
+reconciliation paths must survive a closed switch). No principle removed
+or contradicted.
+
+Amended under TG-001-02 (EPIC-TG-001), which found the prior text
+factually wrong: it cited `createSSOrder` as hardcoding `testOrder: true`
+when it has sent `testOrder: false` since commit 54d35c9. An agent
+following the stale example literally would have believed live ordering
+was already contained. Corrected and re-anchored to the actual gates.
+
+Modified principles:
+  - VI. Safety Defaults for Real-World Side Effects — added the
+    fail-closed kill-switch requirement, the "reads stay available"
+    requirement, and the two-gate model; corrected the canonical example
+
+Known remaining drift (NOT fixed here — owned by TG-001-06):
+  ⚠ Principle VII still mandates `getServerSession(authOptions)`, which
+    no longer exists anywhere in the codebase; authentication is Clerk.
+    Agents following Principle VII literally will write NextAuth code.
+    See docs/baseline/TG-001-01-safety-baseline.md variance V7.
+
+--- superseded 1.0.0 → 1.1.0 report retained below ---
+
 Version change: 1.0.0 → 1.1.0
 Bump rationale: MINOR — four new principles added (Pure Logic vs. I/O,
 External API Clients, Safety Defaults, Defence-in-Depth Auth) reflecting
@@ -144,12 +169,31 @@ record at Printavo — MUST default to safe / test mode and require an
 explicit, in-code change to go live. Runtime flags (env vars, query
 params, headers) MUST NOT be the sole gate.
 
-The canonical example is `createSSOrder` in `lib/ssActivewear.js`, which
-hardcodes `testOrder: true`. Flipping that to `false` is a deliberate code
-edit, reviewable in a diff.
+Additionally, any such path that is live MUST carry a runtime kill switch
+that an owner can close without a deploy. The kill switch MUST be
+fail-closed: missing, empty or unrecognised configuration blocks the
+side effect rather than permitting it. Closing the switch MUST NOT
+disable the corresponding read, status or reconciliation paths — work
+already committed externally must remain observable.
 
-When this default is changed, a comment in the PR description MUST call
-out the change explicitly.
+These two controls are complementary, not alternatives. The in-code gate
+satisfies "no runtime flag is the sole gate"; the kill switch satisfies
+"an owner can stop this now." A live path needs both.
+
+The canonical example is S&S order submission. `lib/ssOrderingGate.js`
+holds the in-code gate (`SS_LIVE_ORDERS_CODE_GATE`) and the pure
+evaluation of both gates; `lib/ssOrderingSwitch.js` is the environment
+adapter reading the fail-closed runtime switch (`SS_ORDERING_ENABLED`).
+`createSSOrder` in `lib/ssActivewear.js` evaluates both before reading
+credentials or building a request body, so a closed gate yields zero
+supplier calls.
+
+Note that `createSSOrder` currently sends `testOrder: false` — real
+orders are live, deliberately, as of commit 54d35c9. The gates above are
+what contain that, not the `testOrder` flag.
+
+When a safety default is changed, the PR description MUST call out the
+change explicitly.
 
 **Rationale**: Internal tooling is operated by a small team without a
 staging environment; the cost of an accidental real order is much higher
@@ -289,4 +333,4 @@ principle by Roman numeral (e.g., "violates Principle III — pricing
 math should move into `lib/`"). Violations that ship MUST be tracked
 as follow-up and remediated.
 
-**Version**: 1.1.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-23
+ **Version**: 1.2.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-23
