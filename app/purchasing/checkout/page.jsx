@@ -361,7 +361,13 @@ export default function CheckoutPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Order submission failed');
+      if (!res.ok || !data.ok) {
+        // The route no longer echoes the vendor's error text (it can embed a
+        // whole payload), so surface the correlation ID instead — that is what
+        // support needs to find the detail in the logs.
+        const detail = data.correlationId ? ` (ref ${data.correlationId})` : '';
+        throw new Error(`${data.error || 'Order submission failed'}${detail}`);
+      }
       setConfirmation(data);
       clearCart();
     } catch (err) {
@@ -384,7 +390,8 @@ export default function CheckoutPage() {
             Order submitted to SS Activewear
           </h1>
           <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>
-            Your consolidated order has been placed. Confirmation email sent to aspmerch@gmail.com and gramigscott@gmail.com.
+            Your consolidated order has been placed. A confirmation email has been sent to the
+            configured order recipients.
           </p>
           {(ssOrder.orderNum || ssOrder.poNumber || ssOrder.invoiceNumber) && (
             <dl className="grid grid-cols-2 gap-3 text-sm mb-6">

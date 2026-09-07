@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { requireAdmin } from '@/lib/adminAuth';
 import { generateProofToken } from '@/lib/orderStatus';
+import { appBaseUrl } from '@/lib/httpGuards';
 
 export async function POST(request) {
   const isAdmin = await requireAdmin();
@@ -17,7 +18,9 @@ export async function POST(request) {
   if (!secret) return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
 
   const token = generateProofToken(invoiceId, secret);
-  const baseUrl = process.env.NEXTAUTH_URL || 'https://asp-webapp.vercel.app';
+  // Shared resolver: a preview deployment builds links that point at itself
+  // rather than at production (TG-001-07 / variance V5).
+  const baseUrl = appBaseUrl(request);
   const approvalLink = `${baseUrl}/proof?id=${encodeURIComponent(invoiceId)}&token=${token}`;
 
   await put(

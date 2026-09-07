@@ -1,8 +1,17 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+
+/**
+ * Customer payment page (TG-001-04).
+ *
+ * The amount is no longer held in client state or read from `?amount=`. It is
+ * fetched from `/api/create-payment-session`, which derives it from the
+ * Printavo invoice balance, and it is displayed read-only. There is nothing
+ * on this page a customer can edit that changes what they are charged.
+ */
 
 function formatCurrency(cents) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
@@ -13,14 +22,41 @@ function formatCurrency(cents) {
 function PayForm() {
   const searchParams = useSearchParams();
   const invoiceId = searchParams.get('invoiceId') || '';
-  const amountParam = parseInt(searchParams.get('amount') || '0', 10);
+  // Access token for customers reaching this page from an emailed link.
+  // Signed-in customers are authorised by their Clerk session instead.
+  const token = searchParams.get('token') || '';
 
-  const [amountCents, setAmountCents] = useState(amountParam || '');
+  const [amountCents, setAmountCents] = useState(null);
+  const [loadingAmount, setLoadingAmount] = useState(Boolean(invoiceId));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const parsedCents = parseInt(amountCents, 10);
-  const isValid = invoiceId && Number.isInteger(parsedCents) && parsedCents > 0;
+  const isValid = Boolean(invoiceId) && Number.isInteger(amountCents) && amountCents > 0;
+
+  const loadAmount = useCallback(async () => {
+    if (!invoiceId) return;
+    setLoadingAmount(true);
+    setError(null);
+    try {
+      const query = new URLSearchParams({ invoiceId, ...(token ? { token } : {}) });
+      const res = await fetch(`/api/create-payment-session?${query}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'We could not load this invoice.');
+        setAmountCents(null);
+      } else {
+        setAmountCents(data.amountCents);
+      }
+    } catch {
+      setError('Network error — please reload the page.');
+    } finally {
+      setLoadingAmount(false);
+    }
+  }, [invoiceId, token]);
+
+  useEffect(() => {
+    loadAmount();
+  }, [loadAmount]);
 
   async function handlePay() {
     if (!isValid) return;
@@ -31,12 +67,17 @@ function PayForm() {
       const res = await fetch('/api/create-payment-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId, amountCents: parsedCents }),
+        // `amountCents` is sent as an assertion the server checks against its
+        // own figure, not as the amount to charge. A mismatch means the page
+        // is stale and the request is refused rather than silently repriced.
+        body: JSON.stringify({ invoiceId, amountCents, ...(token ? { token } : {}) }),
       });
       const data = await res.json();
 
       if (!res.ok || !data.sessionUrl) {
         setError(data.error || 'Something went wrong. Please try again.');
+        // A stale amount is recoverable: refresh it so the customer can retry.
+        if (data.code === 'AMOUNT_MISMATCH') await loadAmount();
         setLoading(false);
         return;
       }
@@ -111,34 +152,27 @@ function PayForm() {
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Amount (USD)
+            Balance Due (USD)
           </label>
-          {amountParam > 0 ? (
-            <div style={{
-              height: 44,
-              padding: '0 14px',
-              display: 'flex',
-              alignItems: 'center',
-              fontSize: 22,
-              fontWeight: 700,
-              color: '#00FF66',
-              background: 'rgba(0,255,102,0.06)',
-              border: '1px solid rgba(0,255,102,0.3)',
-              borderRadius: 8,
-            }}>
-              {formatCurrency(amountParam)}
-            </div>
-          ) : (
-            <input
-              type="number"
-              min="1"
-              step="1"
-              style={inputStyle}
-              placeholder="Amount in cents (e.g. 25000 = $250.00)"
-              value={amountCents}
-              onChange={(e) => setAmountCents(e.target.value)}
-            />
-          )}
+          {/* Read-only by design. The figure comes from the invoice balance in
+              Printavo, not from the URL or from anything typed here. */}
+          <div style={{
+            height: 44,
+            padding: '0 14px',
+            display: 'flex',
+            alignItems: 'center',
+            fontSize: 22,
+            fontWeight: 700,
+            color: isValid ? '#00FF66' : 'var(--muted)',
+            background: isValid ? 'rgba(0,255,102,0.06)' : 'var(--background)',
+            border: `1px solid ${isValid ? 'rgba(0,255,102,0.3)' : 'var(--border)'}`,
+            borderRadius: 8,
+          }}>
+            {isValid ? formatCurrency(amountCents) : loadingAmount ? 'Loading…' : '—'}
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--muted)', margin: '8px 0 0', opacity: 0.8 }}>
+            This is the current balance on your invoice.
+          </p>
         </div>
 
         {error && (
@@ -157,7 +191,7 @@ function PayForm() {
 
         <button
           onClick={handlePay}
-          disabled={!isValid || loading}
+          disabled={!isValid || loading || loadingAmount}
           style={{
             width: '100%',
             padding: '14px 0',
@@ -172,7 +206,9 @@ function PayForm() {
             transition: 'all 0.15s',
           }}
         >
-          {loading ? 'Redirecting to Stripe…' : `Pay ${amountParam > 0 ? formatCurrency(amountParam) : 'Now'} →`}
+          {loading
+            ? 'Redirecting to Stripe…'
+            : `Pay ${isValid ? formatCurrency(amountCents) : 'Now'} →`}
         </button>
 
         <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: '1rem', opacity: 0.7 }}>

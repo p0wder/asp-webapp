@@ -11,9 +11,14 @@ test.describe('Pay page', () => {
     await expect(btn).toBeDisabled();
   });
 
-  test('shows amount when amount param is provided', async ({ page }) => {
+  test('ignores an amount supplied in the URL (TG-001-04)', async ({ page }) => {
+    // This previously asserted that `?amount=` set the displayed figure —
+    // which was the defect: the customer chose what to pay. The amount now
+    // comes from the invoice balance, so a URL-supplied figure must not
+    // appear anywhere on the page.
     await page.goto('/pay?invoiceId=test-123&amount=25000');
-    await expect(page.getByText('$250.00').first()).toBeVisible();
+    await expect(page.getByText('$250.00')).toHaveCount(0);
+    await expect(page.getByText(/Balance Due/i)).toBeVisible();
   });
 
   test('pay success page renders confirmation', async ({ page }) => {

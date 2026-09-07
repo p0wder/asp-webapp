@@ -10,6 +10,7 @@ import {
   SS_ORDERING_ENV_VAR,
 } from '../../lib/ssOrderingSwitch.js';
 import { createSSOrder, getSSOrdersByPO } from '../../lib/ssActivewear.js';
+import { installSSConfig } from './fixtures/ssOrderConfig.js';
 
 /**
  * TG-001-02 — live S&S order kill switch.
@@ -25,6 +26,7 @@ test.describe.configure({ mode: 'serial' });
 
 const REAL_FETCH = globalThis.fetch;
 let envBackup;
+let restoreSSConfig;
 let fetchCalls;
 
 /** Replace global fetch with a stub that records every call. */
@@ -57,11 +59,15 @@ test.beforeEach(() => {
   // explained by the kill switch, never by a missing credential.
   process.env.SS_ACTIVEWEAR_USERNAME = 'test-user';
   process.env.SS_ACTIVEWEAR_PASSWORD = 'test-pass';
+  // Likewise a valid operating configuration (TG-001-10): a blocked call must
+  // be explained by the kill switch, never by missing configuration.
+  restoreSSConfig = installSSConfig();
   fetchCalls = [];
 });
 
 test.afterEach(() => {
   globalThis.fetch = REAL_FETCH;
+  restoreSSConfig?.();
   for (const [key, value] of [
     [SS_ORDERING_ENV_VAR, envBackup.switch],
     ['SS_ACTIVEWEAR_USERNAME', envBackup.user],

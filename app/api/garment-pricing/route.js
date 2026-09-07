@@ -1,18 +1,10 @@
 import { NextResponse } from 'next/server';
 import { fetchSSProductsByStyleNumbers } from '@/lib/ssActivewear';
+import { isSameOrigin } from '@/lib/httpGuards';
+import { rateLimit, clientKey, RATE_LIMIT_POLICIES } from '@/lib/rateLimit';
 
-/**
- * Returns true if the request originates from the app's own frontend.
- * Checks the Origin header against NEXTAUTH_URL (falls back to allowing
- * localhost in development when NEXTAUTH_URL is not set).
- */
-function isSameOrigin(request) {
-  const origin = request.headers.get('origin');
-  if (!origin) return false; // server-to-server requests with no Origin header are blocked
-  const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-  // Allow exact match or localhost variants in development
-  return origin === appUrl || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
-}
+/** Bounds the S&S catalog fan-out one request can trigger (TG-001-07). */
+const MAX_STYLES_PER_REQUEST = 25;
 
 /**
  * GET /api/garment-pricing?styles=5000,6210
@@ -43,6 +35,14 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const limit = rateLimit(clientKey(request, 'garment-pricing'), RATE_LIMIT_POLICIES.garmentPricing);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const styles = searchParams.get('styles');
 
@@ -50,6 +50,16 @@ export async function GET(request) {
     return NextResponse.json(
       { error: 'Missing required param: styles (e.g. ?styles=5000,6210)' },
       { status: 400 }
+    );
+  }
+
+  // Bound the catalog fan-out: without this, one request can ask S&S for an
+  // arbitrary number of styles (TG-001-07 AC1).
+  const requestedStyles = styles.split(',').map((s) => s.trim()).filter(Boolean);
+  if (requestedStyles.length === 0 || requestedStyles.length > MAX_STYLES_PER_REQUEST) {
+    return NextResponse.json(
+      { error: `styles must list between 1 and ${MAX_STYLES_PER_REQUEST} style numbers` },
+      { status: 400 },
     );
   }
 
@@ -78,13 +88,14 @@ export async function GET(request) {
       }
     }
 
-    console.log(`[garment-pricing] styles="${styles}" returned ${Object.keys(result).length} styles:`);
+    console.log(`[garment-pricing] requested=${requestedStyles.length} returned=${Object.keys(result).length}`);
     for (const [styleNum, data] of Object.entries(result)) {
-      console.log(`  ${styleNum} | ${data.brand} | ${data.description} | customerPrice=$${data.customerPrice}`);
+      console.log(`  ${styleNum} | ${data.brand} | customerPrice=$${data.customerPrice}`);
     }
     return NextResponse.json(result);
   } catch (err) {
-    console.error('[garment-pricing] error:', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    // The S&S error text can embed a vendor payload — log it, never return it.
+    console.error('[garment-pricing] error:', err?.message || err);
+    return NextResponse.json({ error: 'Pricing lookup failed' }, { status: 502 });
   }
 }

@@ -69,7 +69,10 @@ export default async function MyOrdersPage() {
           {invoices.map((inv) => {
             const statusUrl = secret ? `/order-status?id=${inv.id}&token=${generateStatusToken(inv.id, secret)}` : null;
             const proofUrl = secret ? `/proof?id=${inv.id}&token=${generateProofToken(inv.id, secret)}` : null;
-            const payUrl = `/pay?invoiceId=${inv.id}&amount=${Math.round((inv.total || 0) * 100)}`;
+            // No `amount` — the pay page reads the authoritative balance from
+            // the server, so a figure computed here could only disagree with it
+            // (TG-001-04).
+            const payUrl = `/pay?invoiceId=${encodeURIComponent(inv.id)}`;
             const showProof = inv.status?.name?.toLowerCase().includes('art approval');
             const showPay = inv.total != null && inv.total > 0;
             return (

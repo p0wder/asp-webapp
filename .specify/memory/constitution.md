@@ -1,6 +1,37 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.2.0 → 1.3.0
+Bump rationale: MINOR — Principle VII redefined around the actual auth
+system (Clerk) with new MUSTs (one shared role resolver; the authoritative
+source named); Principle III's authentication step corrected; Principle VI
+expanded with the operating-configuration requirement. No principle removed.
+
+Amended under Track B of EPIC-TG-001 (TG-001-04, -05, -06, -07, -08, -09,
+-10), which closes the remaining half of variance V7: Principle VII still
+mandated `getServerSession(authOptions)`, a function that has not existed
+since NextAuth was decommissioned. An agent following it literally wrote
+NextAuth code against a Clerk application.
+
+Modified principles:
+  - III. API Routes as Thin Adapters — the authentication example now names
+    the function that exists (`requireAdmin()`), not the one that does not
+  - VI. Safety Defaults for Real-World Side Effects — added the validated,
+    fail-closed operating-configuration requirement (TG-001-10)
+  - VII. Defence-in-Depth Auth on Protected Routes — rewritten for Clerk;
+    names `publicMetadata.role` as authoritative and requires both layers to
+    resolve it through the single resolver in `lib/roles.js`
+
+Added sections:
+  - Operational Logging and Correlation (under Development Standards) —
+    codifies the redaction rules from TG-001-08
+
+Known remaining drift: none from V7. Variance V1 (no datastore) is
+unchanged and still blocks TG-001-03 and the exactly-once half of
+TG-001-05; it is a missing capability, not a stale rule.
+
+--- superseded 1.1.0 → 1.2.0 report retained below ---
+
 Version change: 1.1.0 → 1.2.0
 Bump rationale: MINOR — Principle VI materially expanded with new MUSTs
 (mandatory fail-closed runtime kill switch on live side-effect paths;
@@ -104,7 +135,10 @@ type-maintenance overhead do not pay off at this scale.
 
 Every handler in `app/api/**/route.js` MUST follow this shape, in order:
 
-1. Authenticate (e.g., `getServerSession(authOptions)`) — return 401 on failure.
+1. Authenticate — `requireAdmin()` from `lib/adminAuth.js` for admin routes,
+   `auth()` from `@clerk/nextjs/server` for customer routes, or
+   `verifyStatusAccess` / `verifyProofAccess` from `lib/accessControl.js` for
+   token-or-session customer links. Return 401 (or 403) on failure.
 2. Validate the request body / query and return 400 on invalid input.
 3. Delegate to one or more functions in `lib/`.
 4. Return `NextResponse.json(...)` with a meaningful status.
@@ -180,17 +214,28 @@ These two controls are complementary, not alternatives. The in-code gate
 satisfies "no runtime flag is the sole gate"; the kill switch satisfies
 "an owner can stop this now." A live path needs both.
 
+Additionally, the operating values such a path uses — test-versus-live
+mode, destination identity, notification recipients, account identity —
+MUST come from validated server configuration, not from literals in the
+adapter. Validation MUST be fail-closed and MUST NOT substitute a
+default: a missing or malformed value blocks the side effect rather than
+being guessed. Whether a path is in test or live mode MUST be an explicit,
+environment-bound value that appears in the audited preflight record.
+
 The canonical example is S&S order submission. `lib/ssOrderingGate.js`
 holds the in-code gate (`SS_LIVE_ORDERS_CODE_GATE`) and the pure
 evaluation of both gates; `lib/ssOrderingSwitch.js` is the environment
-adapter reading the fail-closed runtime switch (`SS_ORDERING_ENABLED`).
-`createSSOrder` in `lib/ssActivewear.js` evaluates both before reading
-credentials or building a request body, so a closed gate yields zero
-supplier calls.
+adapter reading the fail-closed runtime switch (`SS_ORDERING_ENABLED`);
+`lib/ssOrderConfig.js` validates the operating configuration and
+`lib/ssOrderConfigEnv.js` reads it. `createSSOrder` in
+`lib/ssActivewear.js` evaluates all three before reading credentials or
+building a request body, so any one of them failing yields zero supplier
+calls.
 
-Note that `createSSOrder` currently sends `testOrder: false` — real
-orders are live, deliberately, as of commit 54d35c9. The gates above are
-what contain that, not the `testOrder` flag.
+Note that `createSSOrder` sends `testOrder: false` when `SS_ORDER_MODE`
+is `live` — real orders have been live, deliberately, since commit
+54d35c9. What contains that is the three controls above, not a literal
+in the adapter; there is no longer a `testOrder` literal to read.
 
 When a safety default is changed, the PR description MUST call out the
 change explicitly.
@@ -201,31 +246,62 @@ than the friction of editing a file before going live.
 
 ### VII. Defence-in-Depth Auth on Protected Routes
 
+Authentication is **Clerk**. NextAuth was decommissioned; `next-auth` is
+still an installed dependency but is imported nowhere, and
+`getServerSession` does not exist in this codebase. Code MUST NOT be
+written against it.
+
 Any route that performs admin actions or exposes admin data MUST be
 protected at TWO layers:
 
 1. A matcher entry in `proxy.js` `config.matcher` so unauthenticated
    page requests redirect to `/login` and unauthenticated API requests
    receive 401.
-2. A `getServerSession(authOptions)` check at the top of the route
-   handler that returns 401 if the session is missing.
+2. An authorization check at the top of the route handler —
+   `requireAdmin()` from `lib/adminAuth.js` — that returns 401 when it
+   fails.
+
+`publicMetadata.role` on the Clerk user is the **authoritative** role
+source. Session claims are a projection of it, accepted at the edge only
+because middleware cannot fetch the full user without a network round
+trip per request; the handler layer always re-checks the authoritative
+value, so the edge is an optimisation and never the only decision.
+
+Both layers MUST resolve the role through the single resolver in
+`lib/roles.js`. Comparing a claim inline (`sessionClaims?.role ===
+'admin'`) is a violation: that is precisely how the two layers came to
+disagree indefinitely, with the edge denying admins the handler would
+allow, or the reverse.
+
+Role resolution MUST fail closed. A missing, malformed, non-string or
+unrecognised role denies.
 
 Adding a new admin endpoint without both layers is a constitution
 violation. Public endpoints (e.g., `/api/submit-quote`, `/api/upload`)
-MAY skip the proxy matcher but MUST justify how abuse is mitigated
-(origin check, rate limiting, captcha, etc.) inline in the handler.
+MAY skip the proxy matcher but MUST carry, and justify inline, the
+controls in `lib/httpGuards.js` and `lib/rateLimit.js` — origin guard,
+schema validation, payload limit and rate-limit policy.
+
+Bootstrap and diagnostic endpoints — anything that mutates roles or
+returns session claims and account metadata — MUST NOT exist in the
+deployed application. Role changes are made through the Clerk dashboard;
+see "Granting admin access" in `README.md`. The route inventory in
+`tests/e2e/route-inventory.spec.js` enforces this on every run.
 
 **Rationale**: A misconfigured matcher should not silently expose data.
 Each layer is cheap; together they make an unauthenticated leak require
-two simultaneous mistakes.
+two simultaneous mistakes — but only if both layers are asking the same
+question of the same source.
 
 ## Technology Stack
 
 - **Framework**: Next.js (App Router) + React 19 with the React Compiler
 - **Language**: JavaScript (ES modules)
 - **Styling**: Tailwind CSS v4 (via `@tailwindcss/postcss`)
-- **Auth**: NextAuth.js v4 (credentials provider, bcrypt password hashes
-  in the `ADMIN_USERS` env var)
+- **Auth**: Clerk (`@clerk/nextjs`) — customer accounts and admin roles.
+  `next-auth` and `bcryptjs` remain installed but are used only by unused
+  `scripts/*.mjs`; treat both as pending removal, not as the auth system
+- **Payments**: Stripe Checkout (`stripe`)
 - **File storage**: Vercel Blob (`@vercel/blob`)
 - **Forms**: `react-hook-form` (admin forms only — public forms MAY use
   uncontrolled native inputs)
@@ -282,11 +358,33 @@ distinct concern (a form, a modal, a list row) can be lifted out.
 
 **Logging**
 
-- Mutating external API calls MUST log request body and response (see
-  Principle V).
+- Mutating external API calls MUST be logged (see Principle V), through
+  `logMutation` in `lib/mutationLog.js`.
 - Route handlers MUST log errors with a `[route-name]` prefix.
 - Ad-hoc debugging `console.log`s SHOULD be removed before merging.
   Audit-trail logs in `lib/` clients are intentional and stay.
+
+**Operational Logging and Correlation**
+
+Raw request and response bodies MUST NOT be logged. `JSON.stringify` of a
+vendor payload is a violation — it is how payment-profile IDs, account
+emails and full ship-to addresses reached the log stream.
+
+Instead, every external mutation MUST emit:
+
+- One `attempt` line before the call and exactly one `success`, `failure`
+  or `blocked` line after it.
+- A correlation ID (`cid`) shared by every line of one user action, and
+  returned to the caller on any failure response so a report can be traced
+  to its logs without the payload being exposed.
+- Allowlisted fields only, which the emitter additionally passes through
+  the maskers in `lib/logRedaction.js`. Two independent controls: the
+  caller chooses what is interesting, the emitter masks what is sensitive.
+
+Secrets, tokens, payment profiles, full postal addresses, signed customer
+links and end-user identifiers MUST NOT appear in logs — including inside
+error messages, which vendor SDKs routinely fill with whole response
+bodies. Restoring raw logging is never an acceptable rollback.
 
 **Error messages**
 
@@ -333,4 +431,4 @@ principle by Roman numeral (e.g., "violates Principle III — pricing
 math should move into `lib/`"). Violations that ship MUST be tracked
 as follow-up and remediated.
 
- **Version**: 1.2.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-23
+ **Version**: 1.3.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-09-07

@@ -130,3 +130,99 @@ test.describe('API – validate-promo', () => {
     }
   });
 });
+
+test.describe('API – upload (public endpoint, TG-001-07)', () => {
+  // Rejection paths only: each returns before `put()` is called, so no test
+  // run ever writes a blob (AC2 — a blocked request creates no side effect).
+
+  test('rejects a request with no filename', async ({ page }) => {
+    await page.goto('/');
+    const res = await page.evaluate(async () => {
+      const r = await fetch('/api/upload', { method: 'POST', body: 'x' });
+      return { status: r.status };
+    });
+    expect([400, 403]).toContain(res.status);
+  });
+
+  test('rejects a path-traversal filename', async ({ page }) => {
+    await page.goto('/');
+    const res = await page.evaluate(async () => {
+      const r = await fetch(`/api/upload?filename=${encodeURIComponent('../../etc/passwd')}`, {
+        method: 'POST',
+        body: 'x',
+      });
+      return { status: r.status };
+    });
+    expect([400, 403]).toContain(res.status);
+    expect(res.status).not.toBe(200);
+  });
+
+  test('rejects an unsupported file type', async ({ page }) => {
+    await page.goto('/');
+    const res = await page.evaluate(async () => {
+      const r = await fetch('/api/upload?filename=payload.html', { method: 'POST', body: '<h1>x</h1>' });
+      return { status: r.status };
+    });
+    expect([415, 403]).toContain(res.status);
+    expect(res.status).not.toBe(200);
+  });
+
+  test('rejects an oversized declared upload', async ({ page }) => {
+    await page.goto('/');
+    const res = await page.evaluate(async () => {
+      // 20 MB of declared payload against a 10 MB cap.
+      const r = await fetch('/api/upload?filename=big.png', {
+        method: 'POST',
+        body: new Blob([new Uint8Array(20 * 1024 * 1024)]),
+      });
+      return { status: r.status };
+    });
+    expect([413, 403]).toContain(res.status);
+    expect(res.status).not.toBe(200);
+  });
+
+  test('a request without a browser Origin is rejected', async ({ page }) => {
+    const res = await page.request.post('/api/upload?filename=logo.png', { data: 'x' });
+    expect(res.status()).not.toBe(200);
+  });
+});
+
+test.describe('API – create-payment-session (TG-001-04)', () => {
+  test('a request without a browser Origin is rejected', async ({ page }) => {
+    // Variance V3: this route previously had neither auth nor an origin guard.
+    const res = await page.request.post('/api/create-payment-session', {
+      data: { invoiceId: 'inv_1', amountCents: 100 },
+    });
+    expect(res.status()).toBe(403);
+  });
+
+  test('rejects a request with no invoiceId', async ({ page }) => {
+    await page.goto('/');
+    const res = await page.evaluate(async () => {
+      const r = await fetch('/api/create-payment-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountCents: 100 }),
+      });
+      return { status: r.status };
+    });
+    // 400 = validation, 403 = origin guard. Never a created Stripe session.
+    expect([400, 403]).toContain(res.status);
+  });
+
+  test('never returns a session for an invoice it cannot price', async ({ page }) => {
+    await page.goto('/');
+    const res = await page.evaluate(async () => {
+      const r = await fetch('/api/create-payment-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: 'made-up-invoice', amountCents: 1 }),
+      });
+      return { status: r.status, body: await r.json().catch(() => null) };
+    });
+    // AC4: fail closed. Whatever goes wrong — unknown invoice, unreachable
+    // Printavo, denied access — no sessionUrl comes back.
+    expect(res.status).not.toBe(200);
+    expect(res.body?.sessionUrl).toBeUndefined();
+  });
+});

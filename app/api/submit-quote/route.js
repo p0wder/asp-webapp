@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
+import { isSameOrigin, readJsonBody, isBoundedArray } from '@/lib/httpGuards';
+import { rateLimit, clientKey, RATE_LIMIT_POLICIES } from '@/lib/rateLimit';
+import { logMutation, newCorrelationId, PHASES } from '@/lib/mutationLog';
 
-function isSameOrigin(request) {
-  const origin = request.headers.get('origin');
-  if (!origin) return false;
-  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return true;
-  const host = request.headers.get('host');
-  return host ? origin === `https://${host}` : false;
-}
+/**
+ * Bounds on the public quote payload (TG-001-07 AC1). Each Printavo line item
+ * and artwork URL becomes at least one external mutation, so an unbounded
+ * array here is an unbounded write amplification against Printavo.
+ */
+const MAX_QUOTE_ITEMS = 50;
+const MAX_ARTWORK_URLS = 25;
+const MAX_QUOTE_BODY_BYTES = 256 * 1024;
 
 import {
   findContactByEmail,
@@ -44,8 +48,26 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const limit = rateLimit(clientKey(request, 'submit-quote'), RATE_LIMIT_POLICIES.submitQuote);
+  if (!limit.allowed) {
+    console.warn('[submit-quote] rate limited');
+    return NextResponse.json(
+      { error: 'Too many quote requests. Please try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
+  }
+
+  const parsed = await readJsonBody(request, { maxBytes: MAX_QUOTE_BODY_BYTES });
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+  }
+
+  // One ID across every Printavo write this request makes, so a partially
+  // created quote can be traced end to end (TG-001-08 AC2).
+  const correlationId = newCorrelationId();
+
   try {
-    const body = await request.json();
+    const body = parsed.body || {};
 
     const {
       fname,
@@ -63,8 +85,17 @@ export async function POST(request) {
       promoCode: promoCodeStr = null,
     } = body;
 
-    if (!Array.isArray(quoteItems) || quoteItems.length === 0) {
-      return NextResponse.json({ error: 'At least one quote item is required' }, { status: 400 });
+    if (!isBoundedArray(quoteItems, { min: 1, max: MAX_QUOTE_ITEMS })) {
+      return NextResponse.json(
+        { error: `quoteItems must contain between 1 and ${MAX_QUOTE_ITEMS} items` },
+        { status: 400 },
+      );
+    }
+    if (!isBoundedArray(artworkUrls, { max: MAX_ARTWORK_URLS })) {
+      return NextResponse.json(
+        { error: `artworkUrls must contain at most ${MAX_ARTWORK_URLS} entries` },
+        { status: 400 },
+      );
     }
 
     // ── Build job nickname ────────────────────────────────────────────────────
@@ -273,7 +304,18 @@ export async function POST(request) {
       statusUrl = `/order-status?id=${encodeURIComponent(quote.id)}&token=${token}`;
     }
 
-    console.log('[submit-quote] quote created', { id: quote.id, visualId: quote.visualId });
+    logMutation({
+      correlationId,
+      system: 'printavo',
+      operation: 'createQuote',
+      phase: PHASES.SUCCESS,
+      fields: {
+        quoteId: quote.id,
+        visualId: quote.visualId,
+        itemCount: quoteItems.length,
+        artworkCount: artworkUrls.length,
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -282,11 +324,20 @@ export async function POST(request) {
       quoteUrl: quote.publicUrl,
       statusUrl,
       appliedPromo,
+      correlationId,
     });
   } catch (error) {
-    console.error('[submit-quote] Error submitting quote to Printavo:', error);
+    logMutation({
+      correlationId,
+      system: 'printavo',
+      operation: 'createQuote',
+      phase: PHASES.FAILURE,
+      error,
+    });
+    // The Printavo error text can embed the submitted payload, so it is not
+    // echoed to a public caller. `correlationId` is how support finds it.
     return NextResponse.json(
-      { error: 'Failed to submit quote: ' + error.message },
+      { error: 'Failed to submit quote. Please try again or contact us.', correlationId },
       { status: 500 }
     );
   }

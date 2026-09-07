@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/adminAuth';
 import { NextResponse } from 'next/server';
 import { placeOrderChain } from '@/lib/placeOrderChain';
 import { getSSOrderingState } from '@/lib/ssOrderingSwitch';
+import { getSSOrderConfigStatus } from '@/lib/ssOrderConfigEnv';
+import { logMutation, newCorrelationId, PHASES } from '@/lib/mutationLog';
 
 /**
  * POST /api/place-order
@@ -28,14 +30,22 @@ import { getSSOrderingState } from '@/lib/ssOrderingSwitch';
  * Response shape: see `.specify/specs/002-printavo-order-notification/contracts/place-order.md`.
  *
  * Returns 503 `{ error, code: 'SS_ORDERING_DISABLED', reason }` when the S&S
- * kill switch is closed (TG-001-02) — no supplier or Printavo call is made.
- * See the "S&S Ordering Kill Switch" section in README.md.
+ * kill switch is closed (TG-001-02), or 503
+ * `{ error, code: 'SS_ORDER_CONFIG_INVALID', fields }` when the S&S operating
+ * configuration is missing or malformed (TG-001-10). In both cases no supplier
+ * or Printavo call is made. See "S&S Ordering Kill Switch" and "S&S Order
+ * Configuration" in README.md.
+ *
+ * Every response path carries a `correlationId`, which is also the `cid` on
+ * the `[mutation]` log lines for this submission (TG-001-08).
  */
 export async function POST(request) {
   const isAdmin = await requireAdmin();
   if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const correlationId = newCorrelationId();
 
   // ── Kill switch (TG-001-02) ─────────────────────────────────────────────
   // Checked before body validation and before any delegation, so a disabled
@@ -44,14 +54,43 @@ export async function POST(request) {
   // contract instead of a 500 from a thrown adapter error.
   const ssOrdering = getSSOrderingState();
   if (!ssOrdering.allowed) {
-    console.warn('[place-order] Rejected: S&S ordering disabled', {
-      reason: ssOrdering.reason,
+    logMutation({
+      correlationId,
+      system: 'ss',
+      operation: 'placeOrder',
+      phase: PHASES.BLOCKED,
+      fields: { blockedBy: 'killSwitch', reason: ssOrdering.reason },
     });
     return NextResponse.json(
       {
         error: 'S&S ordering is currently disabled. No order was submitted.',
         code: 'SS_ORDERING_DISABLED',
         reason: ssOrdering.reason,
+        correlationId,
+      },
+      { status: 503 },
+    );
+  }
+
+  // ── Operating configuration (TG-001-10) ─────────────────────────────────
+  // Same reasoning as above: `createSSOrder` re-validates independently, but
+  // rejecting here turns an invalid configuration into a stable 503 rather
+  // than a 500, and names the offending fields so an operator can fix them.
+  const ssConfig = getSSOrderConfigStatus();
+  if (!ssConfig.ok) {
+    logMutation({
+      correlationId,
+      system: 'ss',
+      operation: 'placeOrder',
+      phase: PHASES.BLOCKED,
+      fields: { blockedBy: 'configuration', errorFields: ssConfig.errorFields },
+    });
+    return NextResponse.json(
+      {
+        error: 'S&S order configuration is invalid. No order was submitted.',
+        code: 'SS_ORDER_CONFIG_INVALID',
+        fields: ssConfig.errorFields,
+        correlationId,
       },
       { status: 503 },
     );
@@ -100,10 +139,23 @@ export async function POST(request) {
     }
   }
 
-  console.log(
-    '[place-order] Submitting order (testOrder=false, LIVE):',
-    JSON.stringify({ poNumber, lineCount: lines.length, paymentProfileId }, null, 2),
-  );
+  // The submission's own preflight and outcome lines come from
+  // `createSSOrder`; this one records that the route accepted the request.
+  // `paymentProfileId` is deliberately reduced to a boolean — it is a payment
+  // identifier, which the security floor keeps out of logs (variance V12).
+  logMutation({
+    correlationId,
+    system: 'ss',
+    operation: 'placeOrder',
+    phase: PHASES.ATTEMPT,
+    fields: {
+      mode: ssConfig.summary.mode,
+      testOrder: ssConfig.summary.testOrder,
+      lineCount: lines.length,
+      poNumber: poNumber ?? null,
+      hasPaymentProfile: Boolean(paymentProfileId),
+    },
+  });
 
   try {
     const user = await currentUser();
@@ -119,10 +171,14 @@ export async function POST(request) {
       comments,
       paymentProfileId,
       submittedBy,
+      correlationId,
     });
-    console.log(
-      '[place-order] chain complete:',
-      JSON.stringify({
+    logMutation({
+      correlationId,
+      system: 'ss',
+      operation: 'placeOrder',
+      phase: PHASES.SUCCESS,
+      fields: {
         ssOrderRef: result.attributionRecord.ssOrderRef,
         attribWriteOk: result.attributionRecord.writeOk,
         perInvoice: result.perInvoice.map((p) => ({
@@ -130,13 +186,28 @@ export async function POST(request) {
           classification: p.classification,
           statusOutcome: p.statusUpdate?.outcome,
         })),
-      }),
-    );
-    return NextResponse.json({ ok: true, ...result });
+      },
+    });
+    return NextResponse.json({ ok: true, correlationId, ...result });
   } catch (err) {
     // SS Activewear submission itself failed — no Printavo updates or
     // attribution writes were attempted (per FR-007).
-    console.error('[place-order] Error:', err?.message || err);
-    return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
+    logMutation({
+      correlationId,
+      system: 'ss',
+      operation: 'placeOrder',
+      phase: PHASES.FAILURE,
+      error: err,
+    });
+    // The vendor's message can embed a whole payload, so it is not returned
+    // to the caller. `correlationId` is how support finds the detail in logs.
+    return NextResponse.json(
+      {
+        error: 'Order submission failed. See server logs for this correlation ID.',
+        code: err?.code ?? 'SS_ORDER_FAILED',
+        correlationId,
+      },
+      { status: 500 },
+    );
   }
 }

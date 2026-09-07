@@ -240,7 +240,11 @@ test.describe('Quote form – step 4 (Review & Submit)', () => {
   });
 
   test('shows quantity in order summary', async ({ page }) => {
-    await expect(page.getByText(/48/)).toBeVisible();
+    // `getByText(/48/)` matched both the quantity "48 qty" and the price
+    // "$418.48", so strict mode rejected it — the inherited failing test
+    // recorded as variance V11. The assertion is unchanged in intent; the
+    // locator now names the quantity unambiguously.
+    await expect(page.getByText(/\b48 qty\b/)).toBeVisible();
   });
 
   test('shows color in order summary', async ({ page }) => {
