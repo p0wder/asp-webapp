@@ -1,6 +1,69 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.2.0 → 1.3.0
+Bump rationale: MINOR — Principle VII rewritten onto Clerk with a new MUST
+(both layers must resolve to one underlying role source) and Principle III
+step 1 corrected. No principle removed; the two-layer requirement itself is
+unchanged, only the mechanism it names.
+
+Amended under TG-001-01 variance V7, which the 1.2.0 report recorded as
+known remaining drift. The prior text mandated
+`getServerSession(authOptions)` in every protected handler. That function
+does not exist anywhere in this repository — `next-auth` is a dependency
+imported by nothing — so an agent following Principle VII literally would
+write NextAuth code against a decommissioned auth system. Authentication
+is Clerk (`@clerk/nextjs` 7.4.1).
+
+Modified principles:
+  - III. API Routes as Thin Adapters — step 1 no longer cites
+    `getServerSession(authOptions)`; now names `requireAdmin()` and Clerk
+    `auth()`
+  - VII. Defence-in-Depth Auth on Protected Routes — rewritten onto Clerk;
+    added the single-role-source MUST; named the two concrete layers as
+    they exist in `proxy.js` and `lib/adminAuth.js`
+
+Also corrected:
+  - Technology Stack "Auth" line — was NextAuth.js v4 with `ADMIN_USERS`
+    bcrypt hashes; is Clerk. `next-auth`, `NEXTAUTH_SECRET` and
+    `ADMIN_USERS` remain in the tree but are used by no application code
+    (V5); `NEXTAUTH_URL` is still load-bearing as an origin/base-URL value
+    and is called out as drift, not endorsed.
+
+Known remaining drift (NOT fixed here — each owned by a live issue):
+  ⚠ `proxy.js:36` reads `sessionClaims?.role`; `lib/adminAuth.js:5` reads
+    `publicMetadata?.role`. Principle VII now REQUIRES these to resolve to
+    one source; they do not today. Choosing the canonical source and
+    reconciling them is TG-001-06 (#119). Baseline finding F5.
+    (The baseline report cites :33 and :4 — correct at commit 068645e,
+    shifted by one and three lines since TG-001-02 landed.)
+  ⚠ `/api/search-products` has a `proxy.js` matcher entry but no
+    in-handler authorization — a standing Principle VII violation.
+    Baseline variance V2, folded into TG-001-06 (#119).
+  ⚠ `NEXTAUTH_URL` is the origin allow-list and base-URL source for four
+    routes despite NextAuth being decommissioned. Baseline variance V5;
+    owned by TG-001-07 (#120) and DR-002-11.
+  ⚠ Ten files under `.specify/specs/001-*` and `.specify/specs/002-*`
+    still instruct `getServerSession(authOptions)` — in delivered
+    contracts, in a Constitution Check marked PASS, and in two task items
+    still shown unchecked (`002-.../tasks.md` T014, T016) even though
+    both routes exist and use Clerk. They are HISTORICAL records of past
+    planning and were deliberately NOT rewritten here; rewriting a
+    delivered spec would falsify the record. Per Governance, this
+    constitution is the source of truth where the two disagree: **auth is
+    Clerk, and no new code takes `getServerSession` from a spec doc.**
+
+Templates checked:
+  - ✅ .specify/templates/plan-template.md — Constitution Check section is
+    generic; still no Principle-keyed gate items (carried forward from the
+    1.2.0 report as a flag for human review, not an automated edit)
+  - ✅ spec-template.md, tasks-template.md — generic, no change required
+  - ✅ README.md — env-var table already documents Clerk; the stale
+    `NEXTAUTH_SECRET` / `ADMIN_USERS` rows are variance V8, owned by
+    TG-001-10 (#123)
+
+--- superseded 1.1.0 → 1.2.0 report retained below ---
+
 Version change: 1.1.0 → 1.2.0
 Bump rationale: MINOR — Principle VI materially expanded with new MUSTs
 (mandatory fail-closed runtime kill switch on live side-effect paths;
@@ -23,6 +86,7 @@ Known remaining drift (NOT fixed here — owned by TG-001-06):
     no longer exists anywhere in the codebase; authentication is Clerk.
     Agents following Principle VII literally will write NextAuth code.
     See docs/baseline/TG-001-01-safety-baseline.md variance V7.
+  [RESOLVED in 1.3.0 — see the report above.]
 
 --- superseded 1.0.0 → 1.1.0 report retained below ---
 
@@ -104,7 +168,9 @@ type-maintenance overhead do not pay off at this scale.
 
 Every handler in `app/api/**/route.js` MUST follow this shape, in order:
 
-1. Authenticate (e.g., `getServerSession(authOptions)`) — return 401 on failure.
+1. Authenticate — `requireAdmin()` from `lib/adminAuth.js` on admin routes,
+   Clerk `auth()` on customer routes. Return 401 on failure. See
+   Principle VII.
 2. Validate the request body / query and return 400 on invalid input.
 3. Delegate to one or more functions in `lib/`.
 4. Return `NextResponse.json(...)` with a meaningful status.
@@ -138,8 +204,8 @@ single replaceable module.
 
 ### V. External APIs Wrapped in `lib/` Clients
 
-Every third-party service (Printavo, SS Activewear, Vercel Blob, NextAuth,
-etc.) MUST be reached through a single dedicated `lib/*.js` client module
+Every third-party service (Printavo, SS Activewear, Vercel Blob, Stripe,
+Clerk, etc.) MUST be reached through a single dedicated `lib/*.js` client module
 (e.g., `lib/printavo.js`, `lib/ssActivewear.js`). Route handlers and
 components MUST NOT call external APIs directly.
 
@@ -201,14 +267,34 @@ than the friction of editing a file before going live.
 
 ### VII. Defence-in-Depth Auth on Protected Routes
 
-Any route that performs admin actions or exposes admin data MUST be
-protected at TWO layers:
+Authentication is **Clerk**. Any route that performs admin actions or
+exposes admin data MUST be protected at TWO layers:
 
-1. A matcher entry in `proxy.js` `config.matcher` so unauthenticated
-   page requests redirect to `/login` and unauthenticated API requests
-   receive 401.
-2. A `getServerSession(authOptions)` check at the top of the route
-   handler that returns 401 if the session is missing.
+1. An entry in the `isAdminRoute` matcher in `proxy.js`, so
+   unauthenticated page requests redirect to `/login` and unauthenticated
+   API requests receive 401 at the edge.
+2. An `await requireAdmin()` check at the top of the route handler that
+   returns 401 when it is false. `lib/adminAuth.js` is the only place
+   the admin predicate is defined; handlers MUST NOT re-implement the
+   role comparison inline.
+
+Customer-owned routes (e.g. `/api/my-orders`) use Clerk `auth()` in the
+handler and the `isProtectedCustomerRoute` matcher, and MUST scope every
+query to the authenticated user — a customer route without an ownership
+filter is a data leak, not merely an authorization gap.
+
+**Both layers MUST resolve to one underlying role source.** Two layers
+reading two different fields do not reinforce each other; they fail
+independently, and can disagree indefinitely because nothing reconciles
+them. Where a JWT session claim is read at the edge, that claim MUST be
+populated from the same record the in-handler check reads.
+
+> ⚠️ This is not true today. `proxy.js:36` reads `sessionClaims?.role`
+> while `lib/adminAuth.js:5` reads `publicMetadata?.role` — and
+> `publicMetadata.role` is what actually gets written. Choosing the
+> canonical source and reconciling the two layers is **TG-001-06**
+> (issue #119); until it lands, this paragraph states the target, not
+> the current state.
 
 Adding a new admin endpoint without both layers is a constitution
 violation. Public endpoints (e.g., `/api/submit-quote`, `/api/upload`)
@@ -217,15 +303,21 @@ MAY skip the proxy matcher but MUST justify how abuse is mitigated
 
 **Rationale**: A misconfigured matcher should not silently expose data.
 Each layer is cheap; together they make an unauthenticated leak require
-two simultaneous mistakes.
+two simultaneous mistakes — but only if both layers are reading the same
+fact. Two layers reading two facts is one layer plus a false sense of
+depth.
 
 ## Technology Stack
 
 - **Framework**: Next.js (App Router) + React 19 with the React Compiler
 - **Language**: JavaScript (ES modules)
 - **Styling**: Tailwind CSS v4 (via `@tailwindcss/postcss`)
-- **Auth**: NextAuth.js v4 (credentials provider, bcrypt password hashes
-  in the `ADMIN_USERS` env var)
+- **Auth**: Clerk (`@clerk/nextjs`) — `clerkMiddleware` in `proxy.js`,
+  `requireAdmin()` in `lib/adminAuth.js`. NextAuth was decommissioned;
+  `next-auth`, `NEXTAUTH_SECRET` and `ADMIN_USERS` survive in the tree
+  but are imported by no application code. `NEXTAUTH_URL` is still
+  load-bearing as an origin allow-list and base-URL value — that is
+  drift to be retired (TG-001-07), not a pattern to copy.
 - **File storage**: Vercel Blob (`@vercel/blob`)
 - **Forms**: `react-hook-form` (admin forms only — public forms MAY use
   uncontrolled native inputs)
@@ -333,4 +425,4 @@ principle by Roman numeral (e.g., "violates Principle III — pricing
 math should move into `lib/`"). Violations that ship MUST be tracked
 as follow-up and remediated.
 
- **Version**: 1.2.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-23
+ **Version**: 1.3.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-09-08
